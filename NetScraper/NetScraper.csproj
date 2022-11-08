@@ -8,7 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="cloudscribe.HtmlAgilityPack" Version="1.0.1" />
     <PackageReference Include="CsvHelper" Version="30.0.0" />
     <PackageReference Include="MongoDB.Bson" Version="2.18.0" />
     <PackageReference Include="MongoDB.Driver" Version="2.18.0" />

@@ -1,4 +1,4 @@
-﻿using cloudscribe.HtmlAgilityPack;
+﻿using HtmlAgilityPack;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,7 +11,8 @@ namespace NetScraper
 	{
 		public double ResponseTime { get; set; }
 		public long ID { get; set; }
-
+		public DateTime dateTime { get; set; }
+		public Uri? absoluteurl { get; set; }
 		public HtmlDocument? HTML { get; set; }
 
 	}

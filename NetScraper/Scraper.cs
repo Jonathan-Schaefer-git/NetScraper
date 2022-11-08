@@ -17,15 +17,35 @@ namespace NetScraper
 	static class Scraper
 	{
 		static ScrapingBrowser _scrapingbrowser = new ScrapingBrowser();
-		static NameValueCollection nvc = new NameValueCollection();
-		public static WebResponse ScrapFromLink(string url)
+		public static Document ScrapFromLink(string url)
 		{
-			var requrl = new Uri(url);
+			var document = new Document();
 			var stopwatch = Stopwatch.StartNew();
-			WebResponse response = _scrapingbrowser.ExecuteRequestAsync(requrl, HttpVerb.Get, nvc);
+			HtmlWeb web = new HtmlWeb();
+			document.HTML = GetDocument(url);
 			stopwatch.Stop();
-			return response;
-			
+			document.ResponseTime = stopwatch.ElapsedMilliseconds;
+			return document;
+		}
+		public static Document ScrapResource(string url)
+		{
+			var document = new Document();
+			var stopwatch = Stopwatch.StartNew();
+			var requesturl = new Uri(url);
+			var w = _scrapingbrowser.DownloadWebResource(requesturl);
+			document.dateTime = DateTime.Now;
+			document.absoluteurl = w.AbsoluteUrl;
+
+
+			stopwatch.Stop();
+			document.ResponseTime = stopwatch.ElapsedMilliseconds;
+			return document;
+		}
+		public static HtmlDocument GetDocument(string url)
+		{
+			HtmlWeb web = new HtmlWeb();
+			HtmlDocument doc = web.Load(url);
+			return doc;
 		}
 	}
 }
