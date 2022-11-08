@@ -12,13 +12,31 @@ namespace NetScraper
 {
 	internal class DBManager
 	{
-		public static string connectionString = "";
-		public static void PushToDB()
-		{
-			MongoClient dbClient = new MongoClient(connectionString);
+		static MongoClient dbClient = new MongoClient(connectionString);
 
-			var database = dbClient.GetDatabase("sample_training");
-			var collection = database.GetCollection<BsonDocument>("grades");
+		static IMongoDatabase database = dbClient.GetDatabase("netscraper");
+		static IMongoCollection<BsonDocument>? collection = database.GetCollection<BsonDocument>("core_data");
+		public static string connectionString = "http://localhost:27017";
+		public static void PushToDB(Document doc)
+		{
+			
+			var document = new BsonDocument { { "student_id", 10000 }, {
+				"scores",
+				new BsonArray {
+				new BsonDocument { { "type", "ID" }, { "score", doc.ID } },
+				new BsonDocument { { "type", "quiz" }, { "score", 74.92381029342834 } },
+				new BsonDocument { { "type", "homework" }, { "score", 89.97929384290324 } },
+				new BsonDocument { { "type", "homework" }, { "score", 82.12931030513218 } }
+				}
+				}, 
+				{ "class_id", 480 }
+
+		};
+			MongoClient dbClient = new MongoClient(connectionString);
+			if(collection != null)
+			{
+				collection.InsertOne(document);
+			}
 		}
 	}
 }

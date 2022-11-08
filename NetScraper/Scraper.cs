@@ -21,8 +21,9 @@ namespace NetScraper
 		{
 			var document = new Document();
 			var stopwatch = Stopwatch.StartNew();
-			HtmlWeb web = new HtmlWeb();
 			document.HTML = GetDocument(url);
+			document.dateTime = DateTime.UtcNow;
+			var w = document.HTML;
 			stopwatch.Stop();
 			document.ResponseTime = stopwatch.ElapsedMilliseconds;
 			return document;
@@ -33,10 +34,13 @@ namespace NetScraper
 			var stopwatch = Stopwatch.StartNew();
 			var requesturl = new Uri(url);
 			var w = _scrapingbrowser.DownloadWebResource(requesturl);
-			document.dateTime = DateTime.Now;
+			document.contenttype = w.ContentType;
+			document.dateTime = DateTime.UtcNow;
 			document.absoluteurl = w.AbsoluteUrl;
+			document.ID = CoreHandler.ID;
 
 
+			//GetResponseTime
 			stopwatch.Stop();
 			document.ResponseTime = stopwatch.ElapsedMilliseconds;
 			return document;
