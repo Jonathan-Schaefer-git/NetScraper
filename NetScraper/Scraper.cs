@@ -16,40 +16,61 @@ namespace NetScraper
 {
 	static class Scraper
 	{
-		static ScrapingBrowser _scrapingbrowser = new ScrapingBrowser();
+		static ScrapingBrowser scrapingbrowser = new ScrapingBrowser();
 		public static Document ScrapFromLink(string url)
 		{
+			Console.WriteLine("Called Scraper");
+			//Open a new Document
 			var document = new Document();
+			//Set Document parameters
+
+			//Get HTMLDocument and time it
 			var stopwatch = Stopwatch.StartNew();
 			document.HTML = GetDocument(url);
-			document.dateTime = DateTime.UtcNow;
-			var w = document.HTML;
+			
 			stopwatch.Stop();
-			document.ResponseTime = stopwatch.ElapsedMilliseconds;
-			return document;
-		}
-		public static Document ScrapResource(string url)
-		{
-			var document = new Document();
-			var stopwatch = Stopwatch.StartNew();
-			var requesturl = new Uri(url);
-			var w = _scrapingbrowser.DownloadWebResource(requesturl);
-			document.contenttype = w.ContentType;
-			document.dateTime = DateTime.UtcNow;
-			document.absoluteurl = w.AbsoluteUrl;
-			document.ID = CoreHandler.ID;
 
+			var breakfastTasks = new List<Task> { eggsTask, baconTask, toastTask };
 
-			//GetResponseTime
-			stopwatch.Stop();
+			var parseLinks = Parser.ParseLinks(document);
+			var imageData = Parser.RetrieveImageData(document);
+			document.absoluteurl = new Uri(url);
+			//Get all linked pages from extracted Document
+			document.Links = Parser.ParseLinks(document);
+			document.ImageData = Parser.RetrieveImageData(document);
+			document.ContentString = Parser.ConvertDocToString(document);
+			document.Emails = Parser.GetEmailOutOfString(document);
+			document.DateTime = DateTime.UtcNow;
 			document.ResponseTime = stopwatch.ElapsedMilliseconds;
+
+			//Debug block:
+			/*
+			if (document.Links != null)
+			{
+				foreach (var item in document.Links)
+				{
+					Console.WriteLine(item);
+				}
+			}
+			else
+			{
+				Console.WriteLine("Links were null");
+			}
+			*/
+
+			
+
+			//Return Document
 			return document;
+			
 		}
+		
 		public static HtmlDocument GetDocument(string url)
 		{
 			HtmlWeb web = new HtmlWeb();
 			HtmlDocument doc = web.Load(url);
 			return doc;
 		}
+		
 	}
 }

@@ -9,14 +9,18 @@ using System.Threading.Tasks;
 
 namespace NetScraper
 {
+	[Serializable]
 	internal class Document
 	{
-		public double ResponseTime { get; set; }
 		public long ID { get; set; }
-		public string? contentstring { get; set; }
-		public DateTime dateTime { get; set; }
-		public Uri? absoluteurl { get; set; }
-		public string? contenttype { get; set; }
-		public HtmlDocument? HTML { get; set; }
+		public double ResponseTime { get; set; }
+		public List<string>? Emails { get; set; } = null;
+		public List<ImageData>? ImageData { get; set; }
+		public DateTime DateTime { get; set; }
+		public Uri? absoluteurl { get; set; } = null;
+		public string? contenttype { get; set; } = null;
+		public IEnumerable<string>? Links { get; set; } = null;
+		public HtmlDocument? HTML { get; set; } = null;
+		public string? ContentString { get; set; } = null;
 	}
 }
