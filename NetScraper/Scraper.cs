@@ -17,7 +17,7 @@ namespace NetScraper
 	static class Scraper
 	{
 		static ScrapingBrowser scrapingbrowser = new ScrapingBrowser();
-		public static Document ScrapFromLink(string url)
+		public static Document ScrapFromLinkAsync(string url)
 		{
 			Console.WriteLine("Called Scraper");
 			//Open a new Document
@@ -29,12 +29,15 @@ namespace NetScraper
 			document.HTML = GetDocument(url);
 			
 			stopwatch.Stop();
-
-			var breakfastTasks = new List<Task> { eggsTask, baconTask, toastTask };
+			document.absoluteurl = new Uri(url);
+			
+			//Async Task to retreive important information faster
+			var linkstask = Parser.ParseLinks(document);
+			var scrapingTasks = new List<Task> {  };
 
 			var parseLinks = Parser.ParseLinks(document);
 			var imageData = Parser.RetrieveImageData(document);
-			document.absoluteurl = new Uri(url);
+			
 			//Get all linked pages from extracted Document
 			document.Links = Parser.ParseLinks(document);
 			document.ImageData = Parser.RetrieveImageData(document);
@@ -62,6 +65,10 @@ namespace NetScraper
 
 			//Return Document
 			return document;
+			
+		}
+		public static Task<Document> De()
+		{
 			
 		}
 		
