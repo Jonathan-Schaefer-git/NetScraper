@@ -1,6 +1,4 @@
 ﻿using HtmlAgilityPack;
-using System.Globalization;
-using System.Net;
 using System.Text.RegularExpressions;
 using System.Web;
 
@@ -62,7 +60,6 @@ namespace NetScraper
 
 		public static List<string>? RetrieveERs(Document doc)
 		{
-			
 			var linklist = new List<string>();
 
 			if (doc.HTML != null && doc.absoluteurl != null)

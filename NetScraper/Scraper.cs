@@ -1,24 +1,13 @@
-﻿using CsvHelper;
-using HtmlAgilityPack;
-using ScrapySharp.Extensions;
+﻿using HtmlAgilityPack;
 using ScrapySharp.Network;
-using System.Globalization;
-using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Threading.Tasks;
-using System.Net;
-using System.Text;
-using System.IO;
 using System.Diagnostics;
-using System.Collections.Specialized;
-using System.Runtime.InteropServices;
-using System;
+using System.Text;
 
 namespace NetScraper
 {
-	static class Scraper
+	internal static class Scraper
 	{
-		static ScrapingBrowser scrapingbrowser = new ScrapingBrowser();
+		private static ScrapingBrowser scrapingbrowser = new ScrapingBrowser();
 
 		public static Document GetSources(Document doc)
 		{
@@ -39,7 +28,7 @@ namespace NetScraper
 			document.HTML = GetDocument(document);
 			stopwatch.Stop();
 			//Check if Website responded
-			if(document.HTML != null)
+			if (document.HTML != null)
 			{
 				document.DateTime = DateTime.UtcNow;
 				//Webpage responded
@@ -49,7 +38,7 @@ namespace NetScraper
 				document.ImageData = Parser.RetrieveImageData(document);
 				document.ContentString = Parser.ConvertDocToString(document);
 				document.Emails = Parser.GetEmailOutOfString(document);
-				
+
 				document.ResponseTime = stopwatch.ElapsedMilliseconds;
 				document.ERLinks = Parser.RetrieveERs(document);
 				try
@@ -66,7 +55,6 @@ namespace NetScraper
 				}
 
 				return document;
-
 			}
 			else
 			{
@@ -76,7 +64,7 @@ namespace NetScraper
 				return document;
 			}
 		}
-		
+
 		public static HtmlDocument? GetDocument(Document document)
 		{
 			HtmlWeb web = new HtmlWeb();
@@ -90,6 +78,5 @@ namespace NetScraper
 				return null;
 			}
 		}
-		
 	}
 }

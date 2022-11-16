@@ -1,29 +1,23 @@
 ﻿using CsvHelper;
-using DnsClient.Protocol;
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace NetScraper
 {
-	static class CSVLog
+	internal static class CSVLog
 	{
-		public static void WriteCSVLog(string path, CSVData csvData)
+		public static void WriteCSVLog(CSVData csvData)
 		{
-			using (var writer = new StreamWriter(path))
+			using (var writer = new StreamWriter(CoreHandler.fileNameCSV))
 			using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
 			{
-				csv.WriteRecords((System.Collections.IEnumerable)csvData);
+				csv.WriteRecord(csvData);
+				csv.NextRecord();
 			}
 		}
 	}
 
-
 	[Serializable]
-	class CSVData
+	internal class CSVData
 	{
 		public static CSVData CSVDataConvert(Document doc)
 		{
