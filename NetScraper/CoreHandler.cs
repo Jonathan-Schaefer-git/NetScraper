@@ -15,6 +15,28 @@ namespace NetScraper
 
 		private static void Main(string[] args)
 		{
+
+			Console.WriteLine(".NETScraper developed by Jona4Dev");
+			Console.WriteLine("https://github.com/Jona4Play/NetScraper");
+			Console.WriteLine("============================================================================");
+			Console.WriteLine("Type 'help' to get the list of commands");
+			var input = Console.ReadLine();
+
+			switch (input)
+			{
+				default:
+					Console.WriteLine("Unknown Command use 'help' to get the list of valid commands");
+					break;
+				case "help":
+					Console.WriteLine();
+					break;
+				case "start":
+					Console.WriteLine();
+					break;
+				case "s":
+					Console.WriteLine();
+					break;
+			}
 			//Main Method to start from
 			var doc = Scraper.ScrapFromLink("https://wikipedia.de");
 
@@ -37,7 +59,7 @@ namespace NetScraper
 		{
 			if (shouldrun)
 			{
-				for (BatchCount = 0; BatchCount < BatchLimit; BatchCount++)
+				foreach(var site in )
 				{
 					var doc = Scraper.ScrapFromLink(url);
 
