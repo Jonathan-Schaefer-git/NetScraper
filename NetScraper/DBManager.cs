@@ -1,5 +1,6 @@
 ﻿using MongoDB.Bson;
 using MongoDB.Driver;
+using Npgsql;
 
 namespace NetScraper
 {
@@ -27,6 +28,11 @@ namespace NetScraper
 			}
 		}
 
+		public static List<string>? GetOutstandingLinks()
+		{
+
+			return null;
+		}
 		private static void PushSDataToDB(Document doc)
 		{
 			if (doc.absoluteurl != null && sdatacollection != null)

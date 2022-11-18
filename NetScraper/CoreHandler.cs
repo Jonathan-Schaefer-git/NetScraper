@@ -15,7 +15,6 @@ namespace NetScraper
 
 		private static void Main(string[] args)
 		{
-
 			Console.WriteLine(".NETScraper developed by Jona4Dev");
 			Console.WriteLine("https://github.com/Jona4Play/NetScraper");
 			Console.WriteLine("============================================================================");
@@ -27,12 +26,15 @@ namespace NetScraper
 				default:
 					Console.WriteLine("Unknown Command use 'help' to get the list of valid commands");
 					break;
+
 				case "help":
 					Console.WriteLine();
 					break;
+
 				case "start":
 					Console.WriteLine();
 					break;
+
 				case "s":
 					Console.WriteLine();
 					break;
@@ -44,6 +46,7 @@ namespace NetScraper
 			//Console.WriteLine(htmlstring);
 
 			//File.WriteAllText(@"C:\\Users\\jona4\\Desktop\Text.txt", htmlstring);
+
 			if (doc != null)
 			{
 				var x = CSVData.CSVDataConvert(doc);
@@ -55,18 +58,29 @@ namespace NetScraper
 			}
 		}
 
-		private static void RunScraper(string url)
+		private static void RunScraper(List<string> outstanding)
 		{
-			if (shouldrun)
+			//Called RunScraper
+			List<Document> documents = new List<Document>();
+			List<string> jsonStrings = new List<string>();
+			List<List<string>> outstandingLinks = new List<List<string>>();
+			if (shouldrun && outstanding != null)
 			{
-				foreach(var site in )
+				foreach (var site in outstanding)
 				{
-					var doc = Scraper.ScrapFromLink(url);
-
-					DBManager.PushDataToDB(doc);
-					var w = DocumentSerializable.Convert(doc);
-					string jsonString = JsonConvert.SerializeObject(w);
+					var w = Scraper.ScrapFromLink(site);
+					if(w.Links != null)
+					{
+						outstandingLinks.Add((List<string>)w.Links);
+						documents.Add(w);
+					}
 				}
+
+				foreach (var doc in documents)
+				{
+					jsonStrings.Add(JsonConvert.SerializeObject(DocumentSerializable.Convert(doc)));
+				}
+				File.WriteAllLines(fileName, jsonStrings);
 				Batch++;
 			}
 		}

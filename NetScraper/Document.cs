@@ -13,12 +13,9 @@ namespace NetScraper
 
 		//ER = External Resource
 		public List<string>? ERLinks { get; set; }
-
-		public List<string>? JSLinks { get; set; }
-		public List<string>? OtherLinks { get; set; }
 		public DateTime DateTime { get; set; }
 		public Uri? absoluteurl { get; set; } = null;
-		public long approxbytesize { get; set; }
+		public long ApproxByteSize { get; set; }
 		public IEnumerable<string>? Links { get; set; } = null;
 		public HtmlDocument? HTML { get; set; } = null;
 		public string? ContentString { get; set; } = null;

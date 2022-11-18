@@ -38,7 +38,6 @@ namespace NetScraper
 				document.ImageData = Parser.RetrieveImageData(document);
 				document.ContentString = Parser.ConvertDocToString(document);
 				document.Emails = Parser.GetEmailOutOfString(document);
-
 				document.ResponseTime = stopwatch.ElapsedMilliseconds;
 				document.ERLinks = Parser.RetrieveERs(document);
 				try
@@ -46,7 +45,7 @@ namespace NetScraper
 					if (document.ContentString != null)
 					{
 						string s = document.ContentString;
-						document.approxbytesize = ASCIIEncoding.Unicode.GetByteCount(document.ContentString);
+						document.ApproxByteSize = ASCIIEncoding.Unicode.GetByteCount(document.ContentString);
 					}
 				}
 				catch (Exception ex)
