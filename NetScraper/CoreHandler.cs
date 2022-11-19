@@ -19,8 +19,8 @@ namespace NetScraper
 			Console.WriteLine("https://github.com/Jona4Play/NetScraper");
 			Console.WriteLine("============================================================================");
 			Console.WriteLine("Type 'help' to get the list of commands");
-			var input = Console.ReadLine();
-
+			//var input = Console.ReadLine();
+			/*
 			switch (input)
 			{
 				default:
@@ -39,14 +39,18 @@ namespace NetScraper
 					Console.WriteLine();
 					break;
 			}
+			*/
+			List<string> list = new List<string>();
+			list.Add("https://wikipedia.de");
+			PostgreSQL.PushOutstanding(list);
+
 			//Main Method to start from
-			var doc = Scraper.ScrapFromLink("https://wikipedia.de");
 
 			//var htmlstring = Parser.ConvertDocToString(doc);
 			//Console.WriteLine(htmlstring);
 
 			//File.WriteAllText(@"C:\\Users\\jona4\\Desktop\Text.txt", htmlstring);
-
+			/*
 			if (doc != null)
 			{
 				var x = CSVData.CSVDataConvert(doc);
@@ -56,14 +60,18 @@ namespace NetScraper
 				File.WriteAllTextAsync(fileName, jsonString);
 				Console.WriteLine(fileName);
 			}
+			*/
 		}
 
-		private static void RunScraper(List<string> outstanding)
+		private static void RunScraper()
 		{
 			//Called RunScraper
+			BatchCount = 0;
 			List<Document> documents = new List<Document>();
 			List<string> jsonStrings = new List<string>();
-			List<List<string>> outstandingLinks = new List<List<string>>();
+			List<string> outstandingLinks = new List<string>();
+			List<string> outstanding = new List<string>();
+			outstanding.AddRange(PostgreSQL.GetOutstanding());
 			if (shouldrun && outstanding != null)
 			{
 				foreach (var site in outstanding)
@@ -71,16 +79,23 @@ namespace NetScraper
 					var w = Scraper.ScrapFromLink(site);
 					if(w.Links != null)
 					{
-						outstandingLinks.Add((List<string>)w.Links);
+						foreach (var item in w.Links)
+						{
+							outstandingLinks.Add(item);
+						}
 						documents.Add(w);
 					}
+					BatchCount++;
 				}
 
+				
 				foreach (var doc in documents)
 				{
 					jsonStrings.Add(JsonConvert.SerializeObject(DocumentSerializable.Convert(doc)));
 				}
 				File.WriteAllLines(fileName, jsonStrings);
+				var x = outstandingLinks.Distinct();
+				PostgreSQL.PushOutstanding(x.ToList());
 				Batch++;
 			}
 		}

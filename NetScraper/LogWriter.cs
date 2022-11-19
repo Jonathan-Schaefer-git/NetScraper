@@ -1,4 +1,6 @@
-﻿namespace NetScraper
+﻿using System.Reflection.PortableExecutable;
+
+namespace NetScraper
 {
 	public class LogWriter
 	{
@@ -15,14 +17,43 @@
 			}
 		}
 
-		public static void WriteLineToLog(string content, int i)
+		public static void WriteLineToLog(List<string> contents)
 		{
-			if (Linecount <= CoreHandler.BatchLimit)
+			var linestobewritten = contents.Count();
+			var linesfree = CoreHandler.BatchLimit - Linecount;
+			if (linesfree > linestobewritten)
 			{
-				File.AppendAllText(CoreHandler.fileName, content);
+				File.AppendAllLines(CoreHandler.fileName, contents);
 			}
-			else
+			else if (Linecount + contents.Count > CoreHandler.BatchLimit && Linecount == 20000)
 			{
+				foreach (var line in contents)
+				{
+					using (StreamWriter swr = new StreamWriter(CoreHandler.fileName, false))
+					{
+						swr.WriteLine(line);
+					}
+				}
+			}
+			else if(linestobewritten > linesfree)
+			{
+				while(Linecount < CoreHandler.BatchLimit)
+				{
+					using (StreamWriter swr = new StreamWriter(CoreHandler.fileName, true))
+					{
+						foreach (var item in contents)
+						{
+							swr.WriteLine(item);
+						}
+					}
+				}
+				using (StreamWriter swr = new StreamWriter(CoreHandler.fileName, false))
+				{
+					foreach (var item in contents)
+					{
+						swr.WriteLine(item);
+					}
+				}
 			}
 		}
 	}
