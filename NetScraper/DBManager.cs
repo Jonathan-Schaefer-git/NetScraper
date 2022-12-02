@@ -22,7 +22,7 @@ namespace NetScraper
 		{
 			if (doc.absoluteurl != null && collection != null)
 			{
-				var document = new BsonDocument { { "website_id", doc.ID }, { "content", doc.ContentString } };
+				var document = new BsonDocument { { "content", doc.ContentString } };
 
 				collection.InsertOne(document);
 			}
@@ -38,7 +38,6 @@ namespace NetScraper
 			if (doc.absoluteurl != null && sdatacollection != null)
 			{
 				var document = new BsonDocument {
-													{ "Website_ID", doc.ID },
 													{ "ResponseTime", doc.ResponseTime },
 													{ "Url", doc.absoluteurl.ToString() },
 													{ "DateTime", doc.DateTime },

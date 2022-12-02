@@ -1,6 +1,7 @@
 ﻿using HtmlAgilityPack;
 using ScrapySharp.Network;
 using System.Diagnostics;
+using System.Net;
 using System.Text;
 
 namespace NetScraper
@@ -39,7 +40,19 @@ namespace NetScraper
 				document.ContentString = Parser.ConvertDocToString(document);
 				document.Emails = Parser.GetEmailOutOfString(document);
 				document.ResponseTime = stopwatch.ElapsedMilliseconds;
-				document.ERLinks = Parser.RetrieveERs(document);
+				document.JSLinks = Parser.RetrieveJSLinks(document);
+				document.CSSLinks = Parser.RetrieveCSSLinks(document);
+				if(document.CSSLinks != null && document.JSLinks != null)
+				{
+					document.CSSCount = document.CSSLinks.Count();
+					document.JSCount = document.JSLinks.Count();
+				}
+				else
+				{
+					document.CSSCount = 0;
+					document.JSCount = 0;
+				}
+				
 				try
 				{
 					if (document.ContentString != null)
@@ -67,6 +80,11 @@ namespace NetScraper
 		public static HtmlDocument? GetDocument(Document document)
 		{
 			HtmlWeb web = new HtmlWeb();
+			web.PreRequest = delegate (HttpWebRequest webRequest)
+			{
+				webRequest.Timeout = 1000;
+				return true;
+			};
 			try
 			{
 				HtmlDocument doc = web.Load(document.absoluteurl);

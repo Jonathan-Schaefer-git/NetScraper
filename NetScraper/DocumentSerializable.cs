@@ -12,13 +12,10 @@
 			//documentSerializable.Emails = doc.Emails;
 			documentSerializable.DateTime = doc.DateTime;
 			//documentSerializable.Links = doc.Links;
-			documentSerializable.ID = doc.ID;
 			documentSerializable.ResponseTime = doc.ResponseTime;
 			//documentSerializable.ERLinks = doc.ERLinks;
 			return documentSerializable;
 		}
-
-		public long ID { get; set; }
 		public bool Status { get; set; }
 		public DateTime DateTime { get; set; }
 		public Uri? URL { get; set; }

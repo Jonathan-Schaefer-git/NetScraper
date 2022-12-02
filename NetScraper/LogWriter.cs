@@ -13,48 +13,28 @@ namespace NetScraper
 				{
 					while (reader.ReadLine() != null) { lines++; }
 				}
+				Console.WriteLine(lines);
 				return lines;
 			}
 		}
+		public static int AtLine { get; set; }
 
 		public static void WriteLineToLog(List<string> contents)
 		{
-			var linestobewritten = contents.Count();
-			var linesfree = CoreHandler.BatchLimit - Linecount;
-			if (linesfree > linestobewritten)
+			/*
+			while ((line = reader.ReadLine()) != null)
 			{
-				File.AppendAllLines(CoreHandler.fileName, contents);
+				line_number++;
+
+				if (line_number > lines_to_delete)
+					break;
 			}
-			else if (Linecount + contents.Count > CoreHandler.BatchLimit && Linecount == 20000)
+
+			while ((line = reader.ReadLine()) != null)
 			{
-				foreach (var line in contents)
-				{
-					using (StreamWriter swr = new StreamWriter(CoreHandler.fileName, false))
-					{
-						swr.WriteLine(line);
-					}
-				}
+				writer.WriteLine(line);
 			}
-			else if(linestobewritten > linesfree)
-			{
-				while(Linecount < CoreHandler.BatchLimit)
-				{
-					using (StreamWriter swr = new StreamWriter(CoreHandler.fileName, true))
-					{
-						foreach (var item in contents)
-						{
-							swr.WriteLine(item);
-						}
-					}
-				}
-				using (StreamWriter swr = new StreamWriter(CoreHandler.fileName, false))
-				{
-					foreach (var item in contents)
-					{
-						swr.WriteLine(item);
-					}
-				}
-			}
+			*/
 		}
 	}
 }

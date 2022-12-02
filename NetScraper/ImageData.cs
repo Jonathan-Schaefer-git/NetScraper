@@ -3,7 +3,8 @@
 	internal class ImageData
 	{
 		public List<ImageData> ListData = new List<ImageData>();
-		public string? links { get; set; }
-		public string? alts { get; set; }
+		public string? Link { get; set; }
+		public string? Alt { get; set; }
+		public string? Relativelocation { get; set; }
 	}
 }

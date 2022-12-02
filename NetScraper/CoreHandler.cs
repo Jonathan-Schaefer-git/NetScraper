@@ -1,19 +1,19 @@
 ﻿using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.Text;
 
 namespace NetScraper
 {
 	internal static class CoreHandler
 	{
-		public static long ID = 0;
 		public static int BatchLimit = 20000;
-		public static int Batch = (int)(ID % BatchLimit);
-		public static int BatchCount = (int)(ID - (ID % BatchLimit));
-		public static bool shouldrun = false;
+		public static int Batch = 0;
+		public static bool shouldrun = true;
 		public static string filepath = Directory.GetParent(Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName).Parent.FullName;
 		public static string fileName = Path.Combine(filepath, "log.json");
 		public static string fileNameCSV = Path.Combine(filepath, "log.csv");
-
-		private static void Main(string[] args)
+		
+		private static void Main()
 		{
 			Console.WriteLine(".NETScraper developed by Jona4Dev");
 			Console.WriteLine("https://github.com/Jona4Play/NetScraper");
@@ -41,9 +41,15 @@ namespace NetScraper
 			}
 			*/
 			List<string> list = new List<string>();
-			list.Add("https://wikipedia.de");
+			list.Add("https://de.wikipedia.org/wiki/Condor_Flugdienst");
+			list.Add("https://www.bild.de/");
+			list.Add("https://www.bild.de/");
+			list.Add("https://www.bild.de/");
+			list.Add("https://www.bild.de/");
+			list.Add("https://www.bild.de/");
 			PostgreSQL.PushOutstanding(list);
-
+			
+			//RunScraper();
 			//Main Method to start from
 
 			//var htmlstring = Parser.ConvertDocToString(doc);
@@ -66,18 +72,21 @@ namespace NetScraper
 		private static void RunScraper()
 		{
 			//Called RunScraper
-			BatchCount = 0;
+			Console.WriteLine("Called Scraping Method");
+			Batch = 0;
 			List<Document> documents = new List<Document>();
 			List<string> jsonStrings = new List<string>();
 			List<string> outstandingLinks = new List<string>();
 			List<string> outstanding = new List<string>();
 			outstanding.AddRange(PostgreSQL.GetOutstanding());
+
 			if (shouldrun && outstanding != null)
 			{
 				foreach (var site in outstanding)
 				{
 					var w = Scraper.ScrapFromLink(site);
-					if(w.Links != null)
+					Console.WriteLine("Approximate Size for {0} is {1}", w.absoluteurl, w.ApproxByteSize);
+					if (w.Links != null)
 					{
 						foreach (var item in w.Links)
 						{
@@ -85,17 +94,38 @@ namespace NetScraper
 						}
 						documents.Add(w);
 					}
-					BatchCount++;
 				}
 
-				
-				foreach (var doc in documents)
-				{
-					jsonStrings.Add(JsonConvert.SerializeObject(DocumentSerializable.Convert(doc)));
+				JsonSerializer js = new JsonSerializer();
+				using (StreamWriter sw = new StreamWriter(fileName))
+				using (JsonWriter writer = new JsonTextWriter(sw))
+				{	
+					writer.WriteStartObject();
+					writer.WritePropertyName("Documents");
+					writer.WriteStartArray();
+					foreach (var doc in documents)
+					{
+						Console.WriteLine(doc.absoluteurl);
+						js.Serialize(writer, DocumentSerializable.Convert(doc));
+						
+					}
+					writer.WriteEndArray();
+					writer.WriteEndObject();
+
 				}
-				File.WriteAllLines(fileName, jsonStrings);
+				
+				foreach (var link in outstanding)
+				{
+					outstandingLinks.Remove(link);
+				}
+				Console.WriteLine("-----");
+				foreach (var item in outstandingLinks)
+				{
+					Console.WriteLine(item);
+				}
 				var x = outstandingLinks.Distinct();
 				PostgreSQL.PushOutstanding(x.ToList());
+				//PostgreSQL.PushDocuments(documents);
 				Batch++;
 			}
 		}

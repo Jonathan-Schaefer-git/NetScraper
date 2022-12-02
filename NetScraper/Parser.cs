@@ -40,8 +40,10 @@ namespace NetScraper
 
 						string attributealt = node.GetAttributeValue("alt", "");
 						string attributelinks = node.GetAttributeValue("src", "");
-						imagedata.alts = attributealt;
-						imagedata.links = GetAbsoluteUrlString(doc.absoluteurl.ToString(), attributelinks);
+						string relativeposition = node.XPath;
+						imagedata.Alt = attributealt;
+						imagedata.Link = GetAbsoluteUrlString(doc.absoluteurl.ToString(), attributelinks);
+						imagedata.Relativelocation = relativeposition;
 						imageDataList.Add(imagedata);
 					}
 					return imageDataList;
@@ -58,7 +60,32 @@ namespace NetScraper
 			return Uri.TryCreate(url, UriKind.Absolute, out result);
 		}
 
-		public static List<string>? RetrieveERs(Document doc)
+		public static List<string>? RetrieveCSSLinks(Document doc)
+		{
+			var linklist = new List<string>();
+
+			if (doc.HTML != null && doc.absoluteurl != null)
+			{
+				var htmlstring = doc.HTML.DocumentNode.OuterHtml;
+				var values = htmlstring.Split("\"");
+				var cssFiles = values.Where(value => value.Contains(".css"));
+				//Console.WriteLine("Looking for JS and CSS");
+				foreach (var cssfile in cssFiles)
+				{
+					if (!CheckLinkValidity(cssfile))
+					{
+						linklist.Add(GetAbsoluteUrlString(doc.absoluteurl.ToString(), cssfile));
+					}
+					else
+					{
+						linklist.Add(cssfile);
+					}
+				}
+				return linklist;
+			}
+			return null;
+		}
+		public static List<string>? RetrieveJSLinks(Document doc)
 		{
 			var linklist = new List<string>();
 
@@ -67,7 +94,6 @@ namespace NetScraper
 				var htmlstring = doc.HTML.DocumentNode.OuterHtml;
 				var values = htmlstring.Split("\"");
 				var jsFiles = values.Where(value => value.Contains(".js"));
-				var cssFiles = values.Where(value => value.Contains(".css"));
 				//Console.WriteLine("Looking for JS and CSS");
 				foreach (var jsfile in jsFiles)
 				{
@@ -78,17 +104,6 @@ namespace NetScraper
 					else
 					{
 						linklist.Add(jsfile);
-					}
-				}
-				foreach (var cssfile in cssFiles)
-				{
-					if (!CheckLinkValidity(cssfile))
-					{
-						linklist.Add(GetAbsoluteUrlString(doc.absoluteurl.ToString(), cssfile));
-					}
-					else
-					{
-						linklist.Add(cssfile);
 					}
 				}
 				return linklist;
@@ -150,6 +165,7 @@ namespace NetScraper
 			Console.WriteLine("ContentString was null");
 			return null;
 		}
+
 
 		/*
 		 * public static bool IsImageUrl(string url)
