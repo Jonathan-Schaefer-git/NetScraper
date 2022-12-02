@@ -22,15 +22,17 @@ namespace NetScraper
 			Console.WriteLine("Called Scraper for {0}", url);
 			//Open a new Document
 			var document = new Document();
-			document.absoluteurl = new Uri(url);
+			document.Absoluteurl = new Uri(url);
 			//Set Document parameters
 			//Get HTMLDocument and time it
 			var stopwatch = Stopwatch.StartNew();
 			document.HTML = GetDocument(document);
 			stopwatch.Stop();
+			
 			//Check if Website responded
 			if (document.HTML != null)
 			{
+				var watch = Stopwatch.StartNew();
 				document.DateTime = DateTime.UtcNow;
 				//Webpage responded
 				document.Status = true;
@@ -65,7 +67,8 @@ namespace NetScraper
 				{
 					Console.WriteLine(ex);
 				}
-
+				watch.Stop();
+				Console.WriteLine("Time for Scrap was {0}", watch.ElapsedMilliseconds);
 				return document;
 			}
 			else
@@ -87,7 +90,7 @@ namespace NetScraper
 			};
 			try
 			{
-				HtmlDocument doc = web.Load(document.absoluteurl);
+				HtmlDocument doc = web.Load(document.Absoluteurl);
 				return doc;
 			}
 			catch (Exception)

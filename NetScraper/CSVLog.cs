@@ -22,7 +22,7 @@ namespace NetScraper
 		public static CSVData CSVDataConvert(Document doc)
 		{
 			CSVData data = new CSVData();
-			data.URL = doc.absoluteurl;
+			data.URL = doc.Absoluteurl;
 			data.Status = doc.Status;
 			data.DateTime = doc.DateTime;
 			return data;

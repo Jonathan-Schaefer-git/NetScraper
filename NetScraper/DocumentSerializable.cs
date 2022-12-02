@@ -6,7 +6,7 @@
 		public static DocumentSerializable Convert(Document doc)
 		{
 			DocumentSerializable documentSerializable = new DocumentSerializable();
-			documentSerializable.URL = doc.absoluteurl;
+			documentSerializable.URL = doc.Absoluteurl;
 			documentSerializable.Status = doc.Status;
 			//documentSerializable.imagedata = doc.ImageData;
 			//documentSerializable.Emails = doc.Emails;

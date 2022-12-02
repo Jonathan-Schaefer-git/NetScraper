@@ -20,7 +20,7 @@ namespace NetScraper
 
 		private static void PushHTMLToDB(Document doc)
 		{
-			if (doc.absoluteurl != null && collection != null)
+			if (doc.Absoluteurl != null && collection != null)
 			{
 				var document = new BsonDocument { { "content", doc.ContentString } };
 
@@ -35,11 +35,11 @@ namespace NetScraper
 		}
 		private static void PushSDataToDB(Document doc)
 		{
-			if (doc.absoluteurl != null && sdatacollection != null)
+			if (doc.Absoluteurl != null && sdatacollection != null)
 			{
 				var document = new BsonDocument {
 													{ "ResponseTime", doc.ResponseTime },
-													{ "Url", doc.absoluteurl.ToString() },
+													{ "Url", doc.Absoluteurl.ToString() },
 													{ "DateTime", doc.DateTime },
 													{ "Links", new BsonArray{} },
 													{ "ImageAlt", new BsonArray{  } },

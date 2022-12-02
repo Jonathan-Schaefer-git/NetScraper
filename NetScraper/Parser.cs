@@ -28,7 +28,7 @@ namespace NetScraper
 		{
 			var document = doc.HTML;
 
-			if (document != null && doc.absoluteurl != null)
+			if (document != null && doc.Absoluteurl != null)
 			{
 				List<ImageData> imageDataList = new List<ImageData>();
 				var x = document.DocumentNode.SelectNodes("//img");
@@ -42,7 +42,7 @@ namespace NetScraper
 						string attributelinks = node.GetAttributeValue("src", "");
 						string relativeposition = node.XPath;
 						imagedata.Alt = attributealt;
-						imagedata.Link = GetAbsoluteUrlString(doc.absoluteurl.ToString(), attributelinks);
+						imagedata.Link = GetAbsoluteUrlString(doc.Absoluteurl.ToString(), attributelinks);
 						imagedata.Relativelocation = relativeposition;
 						imageDataList.Add(imagedata);
 					}
@@ -64,7 +64,7 @@ namespace NetScraper
 		{
 			var linklist = new List<string>();
 
-			if (doc.HTML != null && doc.absoluteurl != null)
+			if (doc.HTML != null && doc.Absoluteurl != null)
 			{
 				var htmlstring = doc.HTML.DocumentNode.OuterHtml;
 				var values = htmlstring.Split("\"");
@@ -74,7 +74,7 @@ namespace NetScraper
 				{
 					if (!CheckLinkValidity(cssfile))
 					{
-						linklist.Add(GetAbsoluteUrlString(doc.absoluteurl.ToString(), cssfile));
+						linklist.Add(GetAbsoluteUrlString(doc.Absoluteurl.ToString(), cssfile));
 					}
 					else
 					{
@@ -89,7 +89,7 @@ namespace NetScraper
 		{
 			var linklist = new List<string>();
 
-			if (doc.HTML != null && doc.absoluteurl != null)
+			if (doc.HTML != null && doc.Absoluteurl != null)
 			{
 				var htmlstring = doc.HTML.DocumentNode.OuterHtml;
 				var values = htmlstring.Split("\"");
@@ -99,7 +99,7 @@ namespace NetScraper
 				{
 					if (!CheckLinkValidity(jsfile))
 					{
-						linklist.Add(GetAbsoluteUrlString(doc.absoluteurl.ToString(), jsfile));
+						linklist.Add(GetAbsoluteUrlString(doc.Absoluteurl.ToString(), jsfile));
 					}
 					else
 					{
@@ -111,17 +111,25 @@ namespace NetScraper
 			return null;
 		}
 
-		private static string GetAbsoluteUrlString(string baseUrl, string url)
+		private static string? GetAbsoluteUrlString(string baseUrl, string url)
 		{
-			var uri = new Uri(url, UriKind.RelativeOrAbsolute);
-			if (!uri.IsAbsoluteUri)
-				uri = new Uri(new Uri(baseUrl), uri);
-			return uri.ToString();
+			try
+			{
+				var uri = new Uri(url, UriKind.RelativeOrAbsolute);
+				if (!uri.IsAbsoluteUri)
+					uri = new Uri(new Uri(baseUrl), uri);
+				return uri.ToString();
+			}
+			catch (Exception)
+			{
+				return null;
+			}
+			
 		}
 
 		public static List<string>? ParseLinks(Document document)
 		{
-			if (document.HTML != null && document.absoluteurl != null)
+			if (document.HTML != null && document.Absoluteurl != null)
 			{
 				var w = new List<string>();
 				var doc = document.HTML;
@@ -131,9 +139,10 @@ namespace NetScraper
 					foreach (var n in nodes)
 					{
 						string href = n.Attributes["href"].Value;
-						w.Add(GetAbsoluteUrlString(document.absoluteurl.ToString(), href));
-						return w.ToList();
+						w.Add(GetAbsoluteUrlString(document.Absoluteurl.ToString(), href));
 					}
+					return w;
+
 				}
 			}
 			return null;
