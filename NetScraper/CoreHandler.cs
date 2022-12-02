@@ -19,7 +19,7 @@ namespace NetScraper
 			Console.WriteLine(".NETScraper developed by Jona4Dev");
 			Console.WriteLine("Loading settings from {0}", fileSettings);
 			LogWriter.ReadSettingsJson();
-			LogWriter.WriteSettingsJson(DateTime.UtcNow);
+			LogWriter.WriteSettingsJson(DateTime.Now);
 			Console.WriteLine("https://github.com/Jona4Play/NetScraper");
 			Console.WriteLine("=========================================");
 			Console.WriteLine("Type 'help' to get the list of commands");

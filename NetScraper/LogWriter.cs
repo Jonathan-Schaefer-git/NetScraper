@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.Reflection.PortableExecutable;
 
 namespace NetScraper
@@ -28,22 +29,14 @@ namespace NetScraper
 		}	
 		public static void ReadSettingsJson()
 		{
-
+			var dt = new DateTime();
 			using (StreamReader sr = new StreamReader(CoreHandler.fileSettings))
+			using (JsonTextReader reader = new JsonTextReader(sr))
 			{
-				JsonTextReader reader = new JsonTextReader(sr);
-				while (reader.Read())
-				{
-					if (reader.Value != null)
-					{
-						Console.WriteLine("Token: {0}, Value: {1}", reader.TokenType, reader.Value);
-					}
-					else
-					{
-						Console.WriteLine("Token: {0}", reader.TokenType);
-					}
-				}
+				JObject keys = (JObject)JToken.ReadFrom(reader);
+				dt = (DateTime)keys.GetValue("Started Scraping");
 			}
+
 		}
 	}
 }
