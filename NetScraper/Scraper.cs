@@ -32,7 +32,7 @@ namespace NetScraper
 			//Check if Website responded
 			if (document.HTML != null)
 			{
-				var watch = Stopwatch.StartNew();
+
 				document.DateTime = DateTime.UtcNow;
 				//Webpage responded
 				document.Status = true;
@@ -67,8 +67,6 @@ namespace NetScraper
 				{
 					Console.WriteLine(ex);
 				}
-				watch.Stop();
-				Console.WriteLine("Time for Scrap was {0}", watch.ElapsedMilliseconds);
 				return document;
 			}
 			else

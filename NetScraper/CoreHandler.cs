@@ -7,16 +7,21 @@ namespace NetScraper
 	{
 		public static int BatchLimit = 20000;
 		public static int Batch = 0;
+		public static int SimultanousPool = 0;
 		public static bool shouldrun = true;
 		public static string filepath = Directory.GetParent(Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName).Parent.FullName;
 		public static string fileName = Path.Combine(filepath, "log.json");
+		public static string fileSettings = Path.Combine(filepath, "settings.json");
 		public static string fileNameCSV = Path.Combine(filepath, "log.csv");
 
 		private static void Main()
 		{
 			Console.WriteLine(".NETScraper developed by Jona4Dev");
+			Console.WriteLine("Loading settings from {0}", fileSettings);
+			LogWriter.ReadSettingsJson();
+			LogWriter.WriteSettingsJson(DateTime.UtcNow);
 			Console.WriteLine("https://github.com/Jona4Play/NetScraper");
-			Console.WriteLine("============================================================================");
+			Console.WriteLine("=========================================");
 			Console.WriteLine("Type 'help' to get the list of commands");
 			var input = Console.ReadLine();
 			
@@ -34,11 +39,19 @@ namespace NetScraper
 					Console.WriteLine("Rerolling Maindata");
 					PostgreSQL.ResetMainData();
 					break;
+				case "new":
+					Console.WriteLine("Rerolling Outstanding");
+					PostgreSQL.ResetOutstanding();
+					break;
 
 				case "start":
 					Console.WriteLine();
 					break;
 			}
+			List<string> list = new List<string>();
+			list.Add("https://wikipedia.org");
+			PostgreSQL.PushOutstanding(list);
+
 			RunScraper();
 			//Main Method to start from
 
