@@ -1,16 +1,19 @@
-﻿using Newtonsoft.Json;
+﻿using MongoDB.Driver;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System.Reflection.PortableExecutable;
 
 namespace NetScraper
 {
-	public class LogWriter
+	public class SettingObject
 	{
-		public struct Settings
-		{
-			public int SimulPool { get; set; }
-			public bool ShouldRun { get; set; }
-		}
+		public DateTime StartedScraping { get; set; }
+		public int SimultaneousPool { get; set; }
+		public bool ShouldRun { get; set; }
+		public long ScrapesCompleted { get; set; }
+	}
+	public static class LogWriter
+	{
+		public static JsonTextReader reader = new JsonTextReader(new StreamReader(CoreHandler.fileSettings));
 		public static void WriteSettingsJson(DateTime time)
 		{
 			JsonSerializer js = new JsonSerializer();
@@ -18,25 +21,28 @@ namespace NetScraper
 			using (JsonWriter writer = new JsonTextWriter(sw))
 			{
 				writer.WriteStartObject();
-				writer.WritePropertyName("Started Scraping");
+				writer.WritePropertyName("StartedScraping");
 				writer.WriteValue(time);
-				writer.WritePropertyName("Simultanous Pool");
-				writer.WriteValue(CoreHandler.SimultanousPool);
-				writer.WritePropertyName("Should Run");
-				writer.WriteValue(CoreHandler.shouldrun);
+				writer.WritePropertyName("SimultaneousPool");
+				writer.WriteValue(CoreHandler.SimultaneousPool);
+				writer.WritePropertyName("ShouldRun");
+				writer.WriteValue(CoreHandler.Shouldrun);
+				writer.WritePropertyName("ScrapesCompleted");
+				writer.WriteValue(CoreHandler.Scrapes);
 				writer.WriteEndObject();
+				writer.Close();
 			}
-		}	
-		public static void ReadSettingsJson()
-		{
-			var dt = new DateTime();
-			using (StreamReader sr = new StreamReader(CoreHandler.fileSettings))
-			using (JsonTextReader reader = new JsonTextReader(sr))
-			{
-				JObject keys = (JObject)JToken.ReadFrom(reader);
-				dt = (DateTime)keys.GetValue("Started Scraping");
-			}
-
 		}
+		public static SettingObject LoadJson()
+		{
+			using (StreamReader r = new StreamReader(CoreHandler.fileSettings))
+			{
+				string json = r.ReadToEnd();
+				var setting = new SettingObject();
+				setting = JsonConvert.DeserializeObject<SettingObject>(json);
+				return setting;
+			}
+		}
+		
 	}
 }

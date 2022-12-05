@@ -85,6 +85,7 @@ namespace NetScraper
 			}
 			return null;
 		}
+
 		public static List<string>? RetrieveJSLinks(Document doc)
 		{
 			var linklist = new List<string>();
@@ -124,134 +125,163 @@ namespace NetScraper
 			{
 				return null;
 			}
-			
 		}
 
-		public static List<string>? ParseLinks(Document document)
+		//Get Second Level Domain
+		private static string GetSLD(string? link)
 		{
-			if (document.HTML != null && document.Absoluteurl != null)
+			if (link != null)
 			{
-				var w = new List<string>();
-				var doc = document.HTML;
-				HtmlNodeCollection nodes = doc.DocumentNode.SelectNodes("//a[@href]");
-				if (nodes != null)
-				{
-					foreach (var n in nodes)
-					{
-						string href = n.Attributes["href"].Value;
-						w.Add(GetAbsoluteUrlString(document.Absoluteurl.ToString(), href));
-					}
-					return w;
+				var host = new Uri(link).Host;
+				return host.Substring(host.LastIndexOf('.', host.LastIndexOf('.') - 1) + 1);
+			}
+			return "";
+		}
 
+	public static List<string>? FindPrioritisedLinks(Document doc)
+	{
+		List<string>? prioritisedlinks = new List<string>();
+		if (doc.Links != null)
+		{
+			var x = GetSLD(doc.Absoluteurl.ToString());
+			foreach (var link in doc.Links.ToList())
+			{
+				if (GetSLD(link) != x)
+				{
+					prioritisedlinks.Add(link);
 				}
 			}
-			return null;
+			return prioritisedlinks;
 		}
-
-		public static List<string>? GetEmailOutOfString(Document document)
+		return null;
+	}
+	public static List<string>? ParseLinks(Document document)
+	{
+		if (document.HTML != null && document.Absoluteurl != null)
 		{
-			//Console.WriteLine("Called GetEmail");
-			List<string>? result = new List<string>();
-			if (document.ContentString != null)
+			var w = new List<string>();
+			var doc = document.HTML;
+			HtmlNodeCollection nodes = doc.DocumentNode.SelectNodes("//a[@href]");
+			if (nodes != null)
 			{
-				//Console.WriteLine("Content String wasn't null");
-				Regex regex = new Regex(@"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}\b", RegexOptions.IgnoreCase);
-				MatchCollection matches = regex.Matches(document.ContentString);
-				if (matches.Count == 0)
+				foreach (var n in nodes)
 				{
-					Console.WriteLine("No E-Mails Found");
+					string href = n.Attributes["href"].Value;
+					w.Add(GetAbsoluteUrlString(document.Absoluteurl.ToString(), href));
 				}
-				foreach (Match match in matches)
-				{
-					//Console.WriteLine(match.Value);
-					result.Add(match.Value);
-				}
-
-				List<string>? email = result.Distinct().ToList();
-
-				return email;
-			}
-			Console.WriteLine("ContentString was null");
-			return null;
-		}
-
-
-		/*
-		 * public static bool IsImageUrl(string url)
-		{
-			if (url is not null)
-			{
-				HttpClient httpClient = new HttpClient();
-
-				var req = (HttpWebRequest)WebRequest.Create(url);
-				req.Method = "HEAD";
-				using (var resp = req.GetResponse())
-				{
-					return resp.ContentType.ToLower(CultureInfo.InvariantCulture)
-							   .StartsWith("image/");
-				}
-			}
-			return false;
-		}
-		public static List<string>? ExtractURLs(Document document)
-		{
-			//Console.WriteLine("Called ExtractURLs");
-			if(document.HTML != null)
-			{
-				//Console.WriteLine("HTML wasn't null");
-				var doc = document.HTML;
-				var linkTags = doc.DocumentNode.Descendants("link");
-				var linkedPages = doc.DocumentNode.Descendants("a")
-												  .Select(a => a.GetAttributeValue("href", null))
-												  .Where(u => !String.IsNullOrEmpty(u));
-				List<string> LinkList = linkedPages.ToList();
-				return	LinkList;
-			}
-			Console.WriteLine("HTML was null");
-			return null;
-		}
-		*/
-
-		public static string? ConvertDocToString(Document doc)
-		{
-			if (doc.HTML == null)
-			{
-				return null;
-			}
-			else
-			{
-				var htmldoc = doc.HTML;
-
-				return Regex.Replace((RemoveInsignificantHtmlWhiteSpace(htmldoc.DocumentNode.OuterHtml) ?? "").Replace("'", @"\'").Trim(), @"[\r\n]+", " ");
+				return w;
 			}
 		}
+		return null;
+	}
 
-		public static string? ConvertDocToUnfromattedString(Document doc)
+	public static List<string>? GetEmailOutOfString(Document document)
+	{
+		//Console.WriteLine("Called GetEmail");
+		List<string>? result = new List<string>();
+		if (document.ContentString != null)
 		{
-			if (doc.HTML == null)
+			//Console.WriteLine("Content String wasn't null");
+			Regex regex = new Regex(@"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}\b", RegexOptions.IgnoreCase);
+			MatchCollection matches = regex.Matches(document.ContentString);
+			if (matches.Count == 0)
 			{
-				return null;
+				Console.WriteLine("No E-Mails Found");
 			}
-			else
-			{
-				var htmldoc = doc.HTML;
-
-				return htmldoc.DocumentNode.OuterHtml;
-			}
-		}
-
-		public static IEnumerable<string> ExtractHttpUrls(string aText, string? aMatch = null)
-		{
-			if (String.IsNullOrEmpty(aText))
-				yield break;
-			var matches = cHttpUrlsRegex.Matches(aText);
-			var vMatcher = aMatch == null ? null : new Regex(aMatch);
 			foreach (Match match in matches)
 			{
-				var vUrl = HttpUtility.UrlDecode(match.Groups["url"].Value);
-				if (vMatcher == null || vMatcher.IsMatch(vUrl))
-					yield return vUrl;
+				if (match.Value.EndsWith(".png") || match.Value.EndsWith(".gif") || match.Value.EndsWith(".svg") || match.Value.EndsWith(".jpg") || match.Value.EndsWith(".webp") || match.Value.EndsWith(".pdf"))
+				{
+					Console.WriteLine("Invalid Mail found");
+				}
+				else
+				{
+					Console.WriteLine(match.Value);
+					result.Add(match.Value);
+				}
+			}
+			List<string>? email = result.Distinct().ToList();
+			return email;
+		}
+		Console.WriteLine("ContentString was null");
+		return null;
+	}
+
+	/*
+	 * public static bool IsImageUrl(string url)
+	{
+		if (url is not null)
+		{
+			HttpClient httpClient = new HttpClient();
+
+			var req = (HttpWebRequest)WebRequest.Create(url);
+			req.Method = "HEAD";
+			using (var resp = req.GetResponse())
+			{
+				return resp.ContentType.ToLower(CultureInfo.InvariantCulture)
+						   .StartsWith("image/");
 			}
 		}
+		return false;
 	}
+	public static List<string>? ExtractURLs(Document document)
+	{
+		//Console.WriteLine("Called ExtractURLs");
+		if(document.HTML != null)
+		{
+			//Console.WriteLine("HTML wasn't null");
+			var doc = document.HTML;
+			var linkTags = doc.DocumentNode.Descendants("link");
+			var linkedPages = doc.DocumentNode.Descendants("a")
+											  .Select(a => a.GetAttributeValue("href", null))
+											  .Where(u => !String.IsNullOrEmpty(u));
+			List<string> LinkList = linkedPages.ToList();
+			return	LinkList;
+		}
+		Console.WriteLine("HTML was null");
+		return null;
+	}
+	*/
+
+	public static string? ConvertDocToString(Document doc)
+	{
+		if (doc.HTML == null)
+		{
+			return null;
+		}
+		else
+		{
+			var htmldoc = doc.HTML;
+
+			return Regex.Replace((RemoveInsignificantHtmlWhiteSpace(htmldoc.DocumentNode.OuterHtml) ?? "").Replace("'", @"\'").Trim(), @"[\r\n]+", " ");
+		}
+	}
+
+	public static string? ConvertDocToUnfromattedString(Document doc)
+	{
+		if (doc.HTML == null)
+		{
+			return null;
+		}
+		else
+		{
+			var htmldoc = doc.HTML;
+			return htmldoc.DocumentNode.OuterHtml;
+		}
+	}
+
+	public static IEnumerable<string> ExtractHttpUrls(string aText, string? aMatch = null)
+	{
+		if (String.IsNullOrEmpty(aText))
+			yield break;
+		var matches = cHttpUrlsRegex.Matches(aText);
+		var vMatcher = aMatch == null ? null : new Regex(aMatch);
+		foreach (Match match in matches)
+		{
+			var vUrl = HttpUtility.UrlDecode(match.Groups["url"].Value);
+			if (vMatcher == null || vMatcher.IsMatch(vUrl))
+				yield return vUrl;
+		}
+	}
+}
 }

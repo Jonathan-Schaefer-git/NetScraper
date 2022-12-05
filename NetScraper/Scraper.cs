@@ -37,7 +37,14 @@ namespace NetScraper
 				//Webpage responded
 				document.Status = true;
 				//Get all linked pages from extracted Document
-				document.Links = Parser.ParseLinks(document);
+				var linklist = Parser.ParseLinks(document);
+				if(linklist != null)
+				{
+					linklist.RemoveAll(x => String.IsNullOrEmpty(x));
+				}
+				document.Links = linklist;
+				//Find Prioritised Links
+				document.PrioritisedLinks = Parser.FindPrioritisedLinks(document);
 				document.ImageData = Parser.RetrieveImageData(document);
 				document.ContentString = Parser.ConvertDocToString(document);
 				document.Emails = Parser.GetEmailOutOfString(document);
@@ -54,7 +61,7 @@ namespace NetScraper
 					document.CSSCount = 0;
 					document.JSCount = 0;
 				}
-				
+
 				try
 				{
 					if (document.ContentString != null)

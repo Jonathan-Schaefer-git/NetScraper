@@ -1,5 +1,7 @@
-﻿using Newtonsoft.Json;
+﻿using MongoDB.Driver;
+using Newtonsoft.Json;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace NetScraper
 {
@@ -7,8 +9,9 @@ namespace NetScraper
 	{
 		public static int BatchLimit = 20000;
 		public static int Batch = 0;
-		public static int SimultanousPool = 0;
-		public static bool shouldrun = true;
+		public static long Scrapes = 0;
+		public static int SimultaneousPool = 100;
+		public static bool Shouldrun = true;
 		public static string filepath = Directory.GetParent(Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName).Parent.FullName;
 		public static string fileName = Path.Combine(filepath, "log.json");
 		public static string fileSettings = Path.Combine(filepath, "settings.json");
@@ -18,7 +21,6 @@ namespace NetScraper
 		{
 			Console.WriteLine(".NETScraper developed by Jona4Dev");
 			Console.WriteLine("Loading settings from {0}", fileSettings);
-			LogWriter.ReadSettingsJson();
 			LogWriter.WriteSettingsJson(DateTime.Now);
 			Console.WriteLine("https://github.com/Jona4Play/NetScraper");
 			Console.WriteLine("=========================================");
@@ -34,42 +36,24 @@ namespace NetScraper
 				case "help":
 					Console.WriteLine();
 					break;
-
-				case "reroll":
-					Console.WriteLine("Rerolling Maindata");
-					PostgreSQL.ResetMainData();
-					break;
 				case "new":
 					Console.WriteLine("Rerolling Outstanding");
 					PostgreSQL.ResetOutstanding();
+					PostgreSQL.ResetMainData();
+					PostgreSQL.ResetPrioritised();
 					break;
 
 				case "start":
 					Console.WriteLine();
 					break;
 			}
+
 			List<string> list = new List<string>();
-			list.Add("https://wikipedia.org");
+			list.Add("https://sn.wikipedia.org/wiki/");
 			PostgreSQL.PushOutstanding(list);
+			
 
 			RunScraper();
-			//Main Method to start from
-
-			//var htmlstring = Parser.ConvertDocToString(doc);
-			//Console.WriteLine(htmlstring);
-
-			//File.WriteAllText(@"C:\\Users\\jona4\\Desktop\Text.txt", htmlstring);
-			/*
-			if (doc != null)
-			{
-				var x = CSVData.CSVDataConvert(doc);
-				CSVLog.WriteCSVLog(x);
-				var w = DocumentSerializable.Convert(doc);
-				string jsonString = JsonConvert.SerializeObject(w);
-				File.WriteAllTextAsync(fileName, jsonString);
-				Console.WriteLine(fileName);
-			}
-			*/
 		}
 
 		private static void RunScraper()
@@ -79,10 +63,16 @@ namespace NetScraper
 			List<Document> documents = new List<Document>();
 			List<string> jsonStrings = new List<string>();
 			List<string> outstandingLinks = new List<string>();
+			List<string> prioritisedLinks = new List<string>();
 			List<string> outstanding = new List<string>();
-			outstanding.AddRange(PostgreSQL.GetOutstanding());
-
-			if (shouldrun && outstanding != null)
+			
+			outstanding.AddRange(PostgreSQL.GetPrioritised());
+			Console.WriteLine(outstanding.Count());
+			outstanding.AddRange(PostgreSQL.GetOutstanding(BatchLimit - outstanding.Count));
+			var setting = LogWriter.LoadJson();
+			Shouldrun = setting.ShouldRun;
+			SimultaneousPool = setting.SimultaneousPool;
+			if (Shouldrun && outstanding != null)
 			{
 				foreach (var site in outstanding)
 				{
@@ -92,48 +82,50 @@ namespace NetScraper
 					Console.WriteLine("Approximate Size for {0} is {1} and took {2}", w.Absoluteurl, w.ApproxByteSize, watch.ElapsedMilliseconds);
 					if (w.Links != null)
 					{
-						foreach (var item in w.Links)
-						{
-							outstandingLinks.Add(item);
-						}
-						documents.Add(w);
+						outstandingLinks.AddRange(w.Links);
 					}
 					else
 					{
 						Console.WriteLine("No Links at this site {0}", w.Absoluteurl);
 					}
-				}
-
-				JsonSerializer js = new JsonSerializer();
-				using (StreamWriter sw = new StreamWriter(fileName))
-				using (JsonWriter writer = new JsonTextWriter(sw))
-				{
-					writer.WriteStartObject();
-					writer.WritePropertyName("Documents");
-					writer.WriteStartArray();
-					foreach (var doc in documents)
+					if (w.PrioritisedLinks != null)
 					{
-						Console.WriteLine(doc.Absoluteurl);
-						js.Serialize(writer, DocumentSerializable.Convert(doc));
+						prioritisedLinks.AddRange(w.PrioritisedLinks);
 					}
-					writer.WriteEndArray();
-					writer.WriteEndObject();
+					else
+					{
+						Console.WriteLine("No Prioritised Links at this site {0}", w.Absoluteurl);
+					}
+					documents.Add(w);
 				}
 
 				foreach (var link in outstanding)
 				{
 					outstandingLinks.Remove(link);
+					prioritisedLinks.Remove(link);
 				}
-				var x = outstandingLinks.Distinct();
+				foreach (var item in prioritisedLinks)
+				{
+					Console.WriteLine(item);
+				}
+				outstandingLinks.Distinct();
+				prioritisedLinks.Distinct();
 				Console.WriteLine("Found {0} Links",outstandingLinks.Count);
-				PostgreSQL.PushOutstanding(x.ToList());
-				PostgreSQL.PushDocuments(documents);
+				Console.WriteLine("#Prioritised Links {0}", prioritisedLinks.Count);
+				PostgreSQL.PushOutstanding(outstandingLinks);
+				PostgreSQL.PushPrioritised(prioritisedLinks);
+				PostgreSQL.PushDocumentList(documents);
 				Batch++;
+				Scrapes = PostgreSQL.GetScrapingCount();
 			}
 			else
 			{
 				Console.WriteLine("Shouldn't run or no Links to Scrap");
 			}
+		}
+		private static void AsyncPushDocument()
+		{
+
 		}
 	}
 }
