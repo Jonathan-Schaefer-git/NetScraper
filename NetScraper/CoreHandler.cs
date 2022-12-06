@@ -7,6 +7,7 @@ namespace NetScraper
 {
 	internal static class CoreHandler
 	{
+		public static DateTime StartedScraping = DateTime.Now;
 		public static int BatchLimit = 20000;
 		public static int Batch = 0;
 		public static long Scrapes = 0;
@@ -20,8 +21,6 @@ namespace NetScraper
 		private static void Main()
 		{
 			Console.WriteLine(".NETScraper developed by Jona4Dev");
-			Console.WriteLine("Loading settings from {0}", fileSettings);
-			LogWriter.WriteSettingsJson(DateTime.Now);
 			Console.WriteLine("https://github.com/Jona4Play/NetScraper");
 			Console.WriteLine("=========================================");
 			Console.WriteLine("Type 'help' to get the list of commands");
@@ -52,7 +51,8 @@ namespace NetScraper
 			list.Add("https://sn.wikipedia.org/wiki/");
 			PostgreSQL.PushOutstanding(list);
 			
-
+			StartedScraping = DateTime.Now;
+			LogWriter.WriteSettingsJson();
 			RunScraper();
 		}
 
@@ -76,10 +76,15 @@ namespace NetScraper
 			{
 				foreach (var site in outstanding)
 				{
-					var watch = Stopwatch.StartNew();
+					var swatch = Stopwatch.StartNew();
 					var w = Scraper.ScrapFromLink(site);
-					watch.Stop();
-					Console.WriteLine("Approximate Size for {0} is {1} and took {2}", w.Absoluteurl, w.ApproxByteSize, watch.ElapsedMilliseconds);
+					swatch.Stop();
+					List<Task> tasks = new List<Task>();
+					for (int i = 0; i < 100; i++)
+					{
+						tasks.Add(() => )
+					}
+					Console.WriteLine("Approximate Size for {0} is {1} and took {2}", w.Absoluteurl, w.ApproxByteSize, swatch.ElapsedMilliseconds);
 					if (w.Links != null)
 					{
 						outstandingLinks.AddRange(w.Links);
@@ -96,7 +101,7 @@ namespace NetScraper
 					{
 						Console.WriteLine("No Prioritised Links at this site {0}", w.Absoluteurl);
 					}
-					documents.Add(w);
+					Task.Run(() => PushDocumentAsync(w));
 				}
 
 				foreach (var link in outstanding)
@@ -104,28 +109,40 @@ namespace NetScraper
 					outstandingLinks.Remove(link);
 					prioritisedLinks.Remove(link);
 				}
-				foreach (var item in prioritisedLinks)
-				{
-					Console.WriteLine(item);
-				}
-				outstandingLinks.Distinct();
-				prioritisedLinks.Distinct();
-				Console.WriteLine("Found {0} Links",outstandingLinks.Count);
-				Console.WriteLine("#Prioritised Links {0}", prioritisedLinks.Count);
-				PostgreSQL.PushOutstanding(outstandingLinks);
-				PostgreSQL.PushPrioritised(prioritisedLinks);
-				PostgreSQL.PushDocumentList(documents);
+				
+				List<string> outstandingLinksnd = new HashSet<string>(outstandingLinks).ToList();
+				List<string> prioritisedLinksnd = new HashSet<string>(prioritisedLinks).ToList();
+				
+				Console.WriteLine("Found {0} Links",outstandingLinksnd.Count);
+				Console.WriteLine("#Prioritised Links {0}", prioritisedLinksnd.Count);
+				TriggerPushLinks(outstandingLinksnd, prioritisedLinksnd);
 				Batch++;
 				Scrapes = PostgreSQL.GetScrapingCount();
+				LogWriter.WriteSettingsJson();
 			}
 			else
 			{
 				Console.WriteLine("Shouldn't run or no Links to Scrap");
 			}
 		}
-		private static void AsyncPushDocument()
+		private static void TriggerPushLinks(List<string> outstandingLinks, List<string> prioritisedLinks)
 		{
-
+			List<Task> tasks = new List<Task>();
+			tasks.Add(Task.Run(() => { PushLinks(outstandingLinks); }));
+			tasks.Add(Task.Run(() => { PushPriotised(prioritisedLinks); }));
+			Task.WaitAll(tasks.ToArray());
+		}
+		private static void PushDocumentAsync(Document document)
+		{
+			PostgreSQL.PushDocument(document);
+		}
+		private static void PushLinks(List<string> outstandingLinks)
+		{
+			PostgreSQL.PushOutstanding(outstandingLinks);
+		}
+		private static void PushPriotised(List<string> prioritisedLinks)
+		{
+			PostgreSQL.PushPrioritised(prioritisedLinks);
 		}
 	}
 }

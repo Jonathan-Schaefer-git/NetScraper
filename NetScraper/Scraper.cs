@@ -96,10 +96,13 @@ namespace NetScraper
 			try
 			{
 				HtmlDocument doc = web.Load(document.Absoluteurl);
+				if (doc == null)
+					Console.WriteLine("No valid HTML Doc");
 				return doc;
 			}
 			catch (Exception)
 			{
+				Console.WriteLine("No valid website");
 				return null;
 			}
 		}

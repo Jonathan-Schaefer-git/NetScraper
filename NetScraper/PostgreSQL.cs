@@ -19,7 +19,7 @@ namespace NetScraper
 			cmd.ExecuteNonQuery();
 
 			cmd.CommandText = @"CREATE TABLE outstanding(id SERIAL PRIMARY KEY,name TEXT)";
-			Console.WriteLine("Created Outstanding");
+			Console.WriteLine("Resetted outstanding");
 			cmd.ExecuteNonQuery();
 			con.Close();
 		}
@@ -35,7 +35,7 @@ namespace NetScraper
 			cmd.ExecuteNonQuery();
 
 			cmd.CommandText = @"CREATE TABLE prioritised(id SERIAL PRIMARY KEY,link TEXT)";
-			Console.WriteLine("Created prioritised");
+			Console.WriteLine("Resetted prioritised");
 			cmd.ExecuteNonQuery();
 			con.Close();
 		}
@@ -68,15 +68,8 @@ namespace NetScraper
 					cmd.ExecuteNonQuery();
 				}
 			}
-			/*
-			foreach (var link in outstanding)
-			{
-				cmd.Parameters.AddWithValue('link', link);
-				cmd.Prepare();
-				cmd.ExecuteNonQuery();
-				Console.WriteLine("Added {0} to stack", link);
-			}
-			*/
+			
+			RemoveDuplicates();
 
 			con.Close();
 		}
@@ -109,6 +102,7 @@ namespace NetScraper
 					cmd.ExecuteNonQuery();
 				}
 			}
+			RemoveDuplicatesPriority(con);
 
 			con.Close();
 		}
@@ -122,17 +116,17 @@ namespace NetScraper
 			using NpgsqlDataReader rdr = cmd.ExecuteReader();
 
 			rdr.Read();
-			var x = rdr.GetString(0);
+			var x = rdr.GetInt64(0);
 			
 			con.Close();
-			return long.Parse(x);
+			return x;
 		}
 
 		public static void PushDocument(Document doc)
 		{
 			using var con = new NpgsqlConnection(cs);
 			con.Open();
-			var sql = @"INSERT INTO maindata(status, url, datetime, emails, csscount, jscount, approximatesize, links, contentstring, imagedescriptions, imagelinks, imagerelativeposition) VALUES(@status, @url, @datetime, @emails, @csscount, @jscount, @approximatesize, @links, @contentstring, @imagelinks, @imagerelativeposition)";
+			var sql = @"INSERT INTO maindata(status, url, datetime, emails, csscount, jscount, approximatesize, links, contentstring, imagedescriptions, imagelinks, imagerelativeposition) VALUES(@status, @url, @datetime, @emails, @csscount, @jscount, @approximatesize, @links, @contentstring, @imagedescriptions ,@imagelinks, @imagerelativeposition)";
 
 			var cmd = new NpgsqlCommand(sql, con);
 			var imagealts = new List<string>();
@@ -170,9 +164,25 @@ namespace NetScraper
 				}
 			}
 			cmd.Parameters.AddWithValue(@"status", doc.Status);
-			cmd.Parameters.AddWithValue(@"url", doc.Absoluteurl.ToString());
+			//This Null Reference check is useless but was added as a safety precussion
+			if(doc.Absoluteurl != null)
+			{
+				cmd.Parameters.AddWithValue(@"url", doc.Absoluteurl.ToString());
+			}
+			else
+			{
+				cmd.Parameters.AddWithValue(@"url", "");
+				throw new Exception("Website was added without Value");
+			}
 			cmd.Parameters.AddWithValue(@"datetime", doc.DateTime.ToString());
-			cmd.Parameters.AddWithValue(@"emails", doc.Emails);
+			if(doc.Emails == null)
+			{
+				cmd.Parameters.AddWithValue(@"emails", "");
+			}
+			else
+			{
+				cmd.Parameters.AddWithValue(@"emails", doc.Emails);
+			}
 			cmd.Parameters.AddWithValue(@"csscount", doc.CSSCount);
 			cmd.Parameters.AddWithValue(@"jscount", doc.JSCount);
 			cmd.Parameters.AddWithValue(@"approximatesize", doc.ApproxByteSize);
@@ -183,7 +193,7 @@ namespace NetScraper
 			}
 			else
 			{
-				cmd.Parameters.AddWithValue(@"links", "");
+				cmd.Parameters.AddWithValue(@"links", new List<string>());
 			}
 			cmd.Parameters.AddWithValue(@"contentstring", doc.ContentString);
 			cmd.Parameters.AddWithValue(@"imagedescriptions", imagealts);
@@ -192,86 +202,6 @@ namespace NetScraper
 			cmd.Prepare();
 			cmd.ExecuteNonQuery();
 
-			con.Close();
-		}
-
-		public static void PushDocumentList(List<Document> documents)
-		{
-			if (documents == null)
-			{
-				return;
-			}
-			using var con = new NpgsqlConnection(cs);
-			con.Open();
-			var sql = "INSERT INTO maindata(status, url, datetime, emails, csscount, jscount, approximatesize, links, contentstring, imagedescriptions, imagelinks, imagerelativeposition) VALUES(@status, @url, @datetime, @emails, @csscount, @jscount, @approximatesize, @links, @contentstring, @imagedescriptions,@imagelinks, @imagerelativeposition)";
-
-			foreach (var doc in documents)
-			{
-				var cmd = new NpgsqlCommand(sql, con);
-				var imagealts = new List<string>();
-				var imagelinks = new List<string>();
-				var imagepositions = new List<string>();
-				if (doc.ContentString == null || doc.ImageData == null)
-				{
-					return;
-				}
-				foreach (var item in doc.ImageData)
-				{
-					if (item.Alt != null)
-					{
-						imagealts.Add(item.Alt);
-					}
-					else
-					{
-						imagealts.Add("");
-					}
-					if (item.Link != null)
-					{
-						imagelinks.Add(item.Link);
-					}
-					else
-					{
-						imagelinks.Add("");
-					}
-					if (item.Relativelocation != null)
-					{
-						imagepositions.Add(item.Relativelocation);
-					}
-					else
-					{
-						imagepositions.Add("");
-					}
-				}
-				cmd.Parameters.AddWithValue(@"status", doc.Status);
-				cmd.Parameters.AddWithValue(@"url", doc.Absoluteurl.ToString());
-				cmd.Parameters.AddWithValue(@"datetime", doc.DateTime.ToString());
-				if (doc.Emails != null)
-				{
-					cmd.Parameters.AddWithValue(@"emails", doc.Emails);
-				}
-				else
-				{
-					cmd.Parameters.AddWithValue(@"emails", "");
-				}
-				cmd.Parameters.AddWithValue(@"csscount", doc.CSSCount);
-				cmd.Parameters.AddWithValue(@"jscount", doc.JSCount);
-				cmd.Parameters.AddWithValue(@"approximatesize", doc.ApproxByteSize);
-
-				if (doc.Links != null)
-				{
-					cmd.Parameters.AddWithValue("links", doc.Links);
-				}
-				else
-				{
-					cmd.Parameters.AddWithValue("links", "");
-				}
-				cmd.Parameters.AddWithValue("contentstring", doc.ContentString);
-				cmd.Parameters.AddWithValue("imagedescriptions", imagealts);
-				cmd.Parameters.AddWithValue("imagelinks", imagelinks);
-				cmd.Parameters.AddWithValue("imagerelativeposition", imagepositions);
-				cmd.Prepare();
-				cmd.ExecuteNonQuery();
-			}
 			con.Close();
 		}
 
@@ -286,7 +216,7 @@ namespace NetScraper
 			cmd.ExecuteNonQuery();
 
 			cmd.CommandText = @"CREATE TABLE maindata(id SERIAL PRIMARY KEY, status BOOLEAN, url TEXT, datetime TEXT, emails TEXT[], csscount INTEGER, jscount INTEGER, approximatesize INTEGER, links TEXT[], contentstring TEXT, imagedescriptions TEXT[], imagelinks TEXT[], imagerelativeposition TEXT[])";
-			Console.WriteLine("Created Outstanding");
+			Console.WriteLine("Resetted maindata");
 			cmd.ExecuteNonQuery();
 			con.Close();
 		}
@@ -297,7 +227,7 @@ namespace NetScraper
 			con.Open();
 			using var cmd = new NpgsqlCommand(removeduplicate, con);
 			var x = cmd.ExecuteNonQuery();
-			Console.WriteLine("Removed {0} duplicates", x);
+			Console.WriteLine("Removed {0} duplicates in outstanding", x);
 			con.Close();
 		}
 
@@ -306,7 +236,7 @@ namespace NetScraper
 			var sql = "DELETE FROM prioritised WHERE ID IN (SELECT ID FROM (SELECT id, ROW_NUMBER() OVER (partition BY link ORDER BY ID) AS RowNumber FROM prioritised) AS T WHERE T.RowNumber > 1);";
 			using var cmd = new NpgsqlCommand(sql, con);
 			var x = cmd.ExecuteNonQuery();
-			Console.WriteLine("Removed {0} duplicates", x);
+			Console.WriteLine("Removed {0} duplicates in prioritised", x);
 		}
 
 		public static IEnumerable<string> GetOutstanding(int i)
@@ -314,11 +244,9 @@ namespace NetScraper
 			List<string> outstanding = new List<string>();
 			using var con = new NpgsqlConnection(cs);
 			con.Open();
-			RemoveDuplicates();
 			StringBuilder sb = new StringBuilder("SELECT * FROM outstanding ORDER BY id DESC LIMIT ");
 			sb.Append(i);
 			sb.Append(";");
-			Console.WriteLine(sb);
 			string sql = sb.ToString();
 
 			using var cmd = new NpgsqlCommand(sql, con);
@@ -338,7 +266,6 @@ namespace NetScraper
 			List<string> prioritised = new List<string>();
 			using var con = new NpgsqlConnection(cs);
 			con.Open();
-			RemoveDuplicatesPriority(con);
 			string sql = "SELECT * FROM prioritised ORDER BY id DESC LIMIT 20000";
 			using var cmd = new NpgsqlCommand(sql, con);
 

@@ -14,7 +14,7 @@ namespace NetScraper
 	public static class LogWriter
 	{
 		public static JsonTextReader reader = new JsonTextReader(new StreamReader(CoreHandler.fileSettings));
-		public static void WriteSettingsJson(DateTime time)
+		public static void WriteSettingsJson()
 		{
 			JsonSerializer js = new JsonSerializer();
 			using (StreamWriter sw = new StreamWriter(CoreHandler.fileSettings))
@@ -22,7 +22,7 @@ namespace NetScraper
 			{
 				writer.WriteStartObject();
 				writer.WritePropertyName("StartedScraping");
-				writer.WriteValue(time);
+				writer.WriteValue(CoreHandler.StartedScraping);
 				writer.WritePropertyName("SimultaneousPool");
 				writer.WriteValue(CoreHandler.SimultaneousPool);
 				writer.WritePropertyName("ShouldRun");
