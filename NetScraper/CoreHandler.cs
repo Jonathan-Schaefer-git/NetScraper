@@ -15,7 +15,7 @@ namespace NetScraper
 		public static string fileSettings = Path.Combine(filepath, "settings.json");
 		public static string fileNameCSV = Path.Combine(filepath, "log.csv");
 
-		private static void Main()
+		private static async void Main()
 		{
 			Console.WriteLine(".NETScraper developed by Jona4Dev");
 			Console.WriteLine("https://github.com/Jona4Play/NetScraper");
@@ -35,9 +35,9 @@ namespace NetScraper
 
 				case "new":
 					Console.WriteLine("Rerolling Outstanding");
-					PostgreSQL.ResetOutstanding();
-					PostgreSQL.ResetMainData();
-					PostgreSQL.ResetPrioritised();
+					await PostgreSQL.ResetOutstandingAsync();
+					await PostgreSQL.ResetMainDataAsync();
+					await PostgreSQL.ResetPrioritisedAsync();
 					break;
 
 				case "start":
@@ -49,9 +49,9 @@ namespace NetScraper
 			list.Add("https://sn.wikipedia.org/wiki/");
 			list.Add("https://www.wikipedia.org/");
 			list.Add("https://de.wikipedia.org/");
-			PostgreSQL.PushOutstanding(list);
+			PostgreSQL.PushOutstandingAsync(list);
 			StartedScraping = DateTime.Now;
-			LogWriter.WriteSettingsJson();
+			await LogWriter.WriteSettingsJsonAsync();
 
 			RunScraper();
 		}
@@ -61,21 +61,20 @@ namespace NetScraper
 			//Called RunScraper
 			Console.WriteLine("Called Scraping Method");
 
-			List<string> jsonStrings = new List<string>();
 			List<string> outstandingLinks = new List<string>();
 			List<string> prioritisedLinks = new List<string>();
 			List<string> outstanding = new List<string>();
 
-			outstanding.AddRange(PostgreSQL.GetPrioritised());
-			outstanding.AddRange(PostgreSQL.GetOutstanding(BatchLimit - outstanding.Count));
+			outstanding.AddRange(await PostgreSQL.GetPrioritisedAsync());
+			outstanding.AddRange(await PostgreSQL.GetOutstandingAsync(BatchLimit - outstanding.Count));
 			Console.WriteLine("Outstanding Count: " + outstanding.Count());
 			while (Shouldrun)
 			{
 				Console.WriteLine("Started Cycle");
-				var setting = LogWriter.LoadJson();
+				var setting = await LogWriter.LoadJsonAsync();
 				Shouldrun = setting.ShouldRun;
 				SimultaneousPool = setting.SimultaneousPool;
-				Console.WriteLine(SimultaneousPool);
+				Console.WriteLine("Concurreny Pool is: " + SimultaneousPool);
 				if (outstanding != null)
 				{
 					var partionedLists = outstanding.Partition(SimultaneousPool);
@@ -109,8 +108,8 @@ namespace NetScraper
 					Console.WriteLine("#Prioritised Links {0}", prioritisedLinksnd.Count);
 					TriggerPushLinks(outstandingLinksnd, prioritisedLinksnd);
 					Batch++;
-					Scrapes = PostgreSQL.GetScrapingCount();
-					LogWriter.WriteSettingsJson();
+					Scrapes = await PostgreSQL.GetScrapingCount();
+					await LogWriter.WriteSettingsJsonAsync();
 				}
 				else
 				{
@@ -122,7 +121,7 @@ namespace NetScraper
 		private static async Task<List<Document>> Scraping(IEnumerable<string> links)
 		{
 			Console.WriteLine("Control Point A");
-			var tasks = links.Select(x => Task.Run(() => Scraper.ScrapFromLink(x))).ToArray();
+			var tasks = links.Select(x => Task.Run(() => Scraper.ScrapFromLinkAsync(x))).ToArray();
 			Console.WriteLine("Control Point B");
 			await Task.WhenAll(tasks);
 			
@@ -131,7 +130,7 @@ namespace NetScraper
 			
 			foreach (var task in tasks)
 			{
-				Task.Run(() => PostgreSQL.PushDocument(task.Result));
+				Task.Run(() => PostgreSQL.PushDocumentAsync(task.Result));
 				documents.Add(task.Result);
 			}
 			
@@ -139,22 +138,23 @@ namespace NetScraper
 			return documents;
 		}
 
-		private static void TriggerPushLinks(List<string> outstandingLinks, List<string> prioritisedLinks)
+		private static async Task<bool> TriggerPushLinks(List<string> outstandingLinks, List<string> prioritisedLinks)
 		{
-			List<Task> tasks = new List<Task>();
-			tasks.Add(Task.Run(() => { PushLinks(outstandingLinks); }));
-			tasks.Add(Task.Run(() => { PushPriotised(prioritisedLinks); }));
-			Task.WaitAll(tasks.ToArray());
-		}
-
-		private static void PushLinks(List<string> outstandingLinks)
-		{
-			PostgreSQL.PushOutstanding(outstandingLinks);
-		}
-
-		private static void PushPriotised(List<string> prioritisedLinks)
-		{
-			PostgreSQL.PushPrioritised(prioritisedLinks);
+			Task<bool>[] tasks = new Task<bool>[1];
+			tasks[0] = PostgreSQL.PushOutstandingAsync(outstandingLinks);
+			tasks[1] = PostgreSQL.PushPrioritisedAsync(prioritisedLinks);
+			await Task.WhenAll(tasks);
+			
+			if (tasks[0].Result == true && tasks[1].Result == true)
+			{
+				Console.WriteLine("Links were pushed successfully");
+				return true;
+			}
+			else
+			{
+				Console.WriteLine("[Error]: Links weren't pushed successfully");
+				return false;
+			}
 		}
 
 		public static IEnumerable<List<T>> Partition<T>(this IList<T> source, Int32 size)

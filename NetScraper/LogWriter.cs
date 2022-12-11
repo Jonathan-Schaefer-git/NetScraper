@@ -14,30 +14,38 @@ namespace NetScraper
 	public static class LogWriter
 	{
 		public static JsonTextReader reader = new JsonTextReader(new StreamReader(CoreHandler.fileSettings));
-		public static void WriteSettingsJson()
+		public static async Task<bool> WriteSettingsJsonAsync()
 		{
 			JsonSerializer js = new JsonSerializer();
 			using (StreamWriter sw = new StreamWriter(CoreHandler.fileSettings))
 			using (JsonWriter writer = new JsonTextWriter(sw))
 			{
-				writer.WriteStartObject();
-				writer.WritePropertyName("StartedScraping");
-				writer.WriteValue(CoreHandler.StartedScraping);
-				writer.WritePropertyName("SimultaneousPool");
-				writer.WriteValue(CoreHandler.SimultaneousPool);
-				writer.WritePropertyName("ShouldRun");
-				writer.WriteValue(CoreHandler.Shouldrun);
-				writer.WritePropertyName("ScrapesCompleted");
-				writer.WriteValue(CoreHandler.Scrapes);
-				writer.WriteEndObject();
-				writer.Close();
+				try
+				{
+					writer.WriteStartObject();
+					writer.WritePropertyName("StartedScraping");
+					writer.WriteValue(CoreHandler.StartedScraping);
+					writer.WritePropertyName("SimultaneousPool");
+					writer.WriteValue(CoreHandler.SimultaneousPool);
+					writer.WritePropertyName("ShouldRun");
+					writer.WriteValue(CoreHandler.Shouldrun);
+					writer.WritePropertyName("ScrapesCompleted");
+					writer.WriteValue(CoreHandler.Scrapes);
+					writer.WriteEndObject();
+					await writer.CloseAsync();
+					return true;
+				}
+				catch (Exception)
+				{
+					return false;
+				}
 			}
 		}
-		public static SettingObject LoadJson()
+		public static async Task<SettingObject> LoadJsonAsync()
 		{
 			using (StreamReader r = new StreamReader(CoreHandler.fileSettings))
 			{
-				string json = r.ReadToEnd();
+				string json = await r.ReadToEndAsync();
 				var setting = new SettingObject();
 				setting = JsonConvert.DeserializeObject<SettingObject>(json);
 				return setting;

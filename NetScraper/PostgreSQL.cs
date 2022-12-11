@@ -1,4 +1,6 @@
 ﻿using Npgsql;
+using NpgsqlTypes;
+using System.Reflection;
 using System.Text;
 
 namespace NetScraper
@@ -7,50 +9,64 @@ namespace NetScraper
 	{
 		private static string removeduplicate = "DELETE FROM outstanding WHERE ID IN (SELECT ID FROM (SELECT id, ROW_NUMBER() OVER (partition BY name ORDER BY ID) AS RowNumber FROM outstanding) AS T WHERE T.RowNumber > 1);";
 		private static string cs = "Host=192.168.2.220;Username=postgres;Password=1598;Database=Netscraper";
-
-		public static void ResetOutstanding()
+		public static async Task<bool> ResetOutstandingAsync()
 		{
 			using var con = new NpgsqlConnection(cs);
-			con.Open();
+			await con.OpenAsync();
 			using var cmd = new NpgsqlCommand();
 			cmd.Connection = con;
 
 			cmd.CommandText = "DROP TABLE IF EXISTS outstanding";
-			cmd.ExecuteNonQuery();
+			var dropstate = await cmd.ExecuteNonQueryAsync();
 
 			cmd.CommandText = @"CREATE TABLE outstanding(id SERIAL PRIMARY KEY,name TEXT)";
 			Console.WriteLine("Resetted outstanding");
-			cmd.ExecuteNonQuery();
-			con.Close();
+			var createstate = await cmd.ExecuteNonQueryAsync();
+			await con.CloseAsync();
+			if(dropstate != -1 && createstate != -1)
+			{
+				return true;
+			}
+			else
+			{
+				return false;
+			}
 		}
 
-		public static void ResetPrioritised()
+		public static async Task<bool> ResetPrioritisedAsync()
 		{
-			using var con = new NpgsqlConnection(cs);
-			con.Open();
+			var con = EstablishDBConnection();
 			using var cmd = new NpgsqlCommand();
 			cmd.Connection = con;
 
 			cmd.CommandText = "DROP TABLE IF EXISTS prioritised";
-			cmd.ExecuteNonQuery();
+			var x = await cmd.ExecuteNonQueryAsync();
 
 			cmd.CommandText = @"CREATE TABLE prioritised(id SERIAL PRIMARY KEY,link TEXT)";
 			Console.WriteLine("Resetted prioritised");
-			cmd.ExecuteNonQuery();
-			con.Close();
+			var state = await cmd.ExecuteNonQueryAsync();
+			await con.CloseAsync();
+			if(state != -1 && x != -1)
+			{
+				return true;
+			}
+			else
+			{
+				return false;
+			}
 		}
 
-		public static void PushOutstanding(List<string> outstanding)
+		public static async Task<bool> PushOutstandingAsync(List<string> outstanding)
 		{
 			if (outstanding == null)
 			{
 				Console.WriteLine("outstanding is null");
-				return;
+				return false;
 			}
-			using var con = new NpgsqlConnection(cs);
-			con.Open();
+			var con = EstablishDBConnection();
+			await con.OpenAsync();
 
-			ResetOutstanding();
+			var resetstate = await ResetOutstandingAsync();
 
 			var sql = @"INSERT INTO outstanding(name) VALUES(@name)";
 			foreach (var item in outstanding)
@@ -59,32 +75,53 @@ namespace NetScraper
 				{
 					var cmd = new NpgsqlCommand(sql, con);
 					cmd.Parameters.AddWithValue("name", item);
-					cmd.ExecuteNonQuery();
+					await cmd.PrepareAsync();
+					await cmd.ExecuteNonQueryAsync();
 				}
 				else
 				{
 					var cmd = new NpgsqlCommand(sql, con);
 					cmd.Parameters.AddWithValue("name", "");
-					cmd.ExecuteNonQuery();
+					await cmd.PrepareAsync();
+					await cmd.ExecuteNonQueryAsync();
 				}
 			}
+			var duplicatestate = await RemoveDuplicatesAsync(con);
+			await con.CloseAsync();
+			if (duplicatestate != false && resetstate != false)
+			{
+				return true;
+			}
+			else
+			{
+				return false;
+			}
 			
-			RemoveDuplicates();
-
-			con.Close();
 		}
-
-		public static void PushPrioritised(List<string> prioritised)
+		private static NpgsqlConnection EstablishDBConnection()
+		{
+			try
+			{
+				var con = new NpgsqlConnection(cs);
+				return con;
+			}
+			catch (Exception)
+			{
+				Console.WriteLine("Database couldn't be reached");
+				return null;
+			}
+		}
+		public static async Task<bool> PushPrioritisedAsync(List<string> prioritised)
 		{
 			if (prioritised == null)
 			{
 				Console.WriteLine("prioritised is null");
-				return;
+				return false;
 			}
-			using var con = new NpgsqlConnection(cs);
-			con.Open();
+			var con = EstablishDBConnection();
+			await con.OpenAsync();
 
-			ResetPrioritised();
+			await ResetPrioritisedAsync();
 
 			var sql = @"INSERT INTO prioritised(link) VALUES(@link)";
 			foreach (var item in prioritised)
@@ -93,36 +130,40 @@ namespace NetScraper
 				{
 					var command = new NpgsqlCommand(sql, con);
 					command.Parameters.AddWithValue(@"link", item);
-					command.ExecuteNonQuery();
+					await command.PrepareAsync();
+					await command.ExecuteNonQueryAsync();
 				}
 				else
 				{
 					var cmd = new NpgsqlCommand(sql, con);
 					cmd.Parameters.AddWithValue(@"link", "");
-					cmd.ExecuteNonQuery();
+					await cmd.PrepareAsync();
+					await cmd.ExecuteNonQueryAsync();
 				}
 			}
-			RemoveDuplicatesPriority(con);
+			var duplicatestate = await RemoveDuplicatesPriorityAsync(con);
 
-			con.Close();
+			await con.CloseAsync();
+
+			return true;
 		}
 
-		public static long GetScrapingCount()
+		public static async Task<long> GetScrapingCount()
 		{
 			using var con = new NpgsqlConnection(cs);
 			con.Open();
 			var sql = "SELECT * FROM maindata WHERE ID = (SELECT MAX(id) FROM maindata)";
 			var cmd = new NpgsqlCommand(sql, con);
-			using NpgsqlDataReader rdr = cmd.ExecuteReader();
+			using NpgsqlDataReader rdr = await cmd.ExecuteReaderAsync();
 
-			rdr.Read();
+			await rdr.ReadAsync();
 			var x = rdr.GetInt64(0);
 			
 			con.Close();
 			return x;
 		}
 
-		public static void PushDocument(Document doc)
+		public static async Task PushDocumentAsync(Document doc)
 		{
 			using var con = new NpgsqlConnection(cs);
 			con.Open();
@@ -199,51 +240,72 @@ namespace NetScraper
 			cmd.Parameters.AddWithValue(@"imagedescriptions", imagealts);
 			cmd.Parameters.AddWithValue(@"imagelinks", imagelinks);
 			cmd.Parameters.AddWithValue(@"imagerelativeposition", imagepositions);
-			cmd.Prepare();
-			cmd.ExecuteNonQuery();
-
-			con.Close();
+			await cmd.PrepareAsync();
+			await cmd.ExecuteNonQueryAsync();
+			await con.CloseAsync();
 		}
 
-		public static void ResetMainData()
+		public static async Task<bool> ResetMainDataAsync()
 		{
-			using var con = new NpgsqlConnection(cs);
-			con.Open();
+			var con = EstablishDBConnection();
+			await con.OpenAsync().ConfigureAwait(false);
 			using var cmd = new NpgsqlCommand();
 			cmd.Connection = con;
 
 			cmd.CommandText = "DROP TABLE IF EXISTS maindata cascade";
-			cmd.ExecuteNonQuery();
+			await cmd.ExecuteNonQueryAsync();
 
 			cmd.CommandText = @"CREATE TABLE maindata(id SERIAL PRIMARY KEY, status BOOLEAN, url TEXT, datetime TEXT, emails TEXT[], csscount INTEGER, jscount INTEGER, approximatesize INTEGER, links TEXT[], contentstring TEXT, imagedescriptions TEXT[], imagelinks TEXT[], imagerelativeposition TEXT[])";
 			Console.WriteLine("Resetted maindata");
-			cmd.ExecuteNonQuery();
-			con.Close();
+			var x = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+			await con.CloseAsync().ConfigureAwait(false);
+			if(x != -1)
+			{
+				return true;
+			}
+			else
+			{
+				return false;
+			}
 		}
 
-		private static void RemoveDuplicates()
+		private static async Task<bool> RemoveDuplicatesAsync(NpgsqlConnection con)
 		{
-			using var con = new NpgsqlConnection(cs);
-			con.Open();
 			using var cmd = new NpgsqlCommand(removeduplicate, con);
-			var x = cmd.ExecuteNonQuery();
-			Console.WriteLine("Removed {0} duplicates in outstanding", x);
-			con.Close();
+			var x = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+			if (x != -1)
+			{
+				Console.WriteLine("Removed {0} duplicates in prioritised", x);
+				return true;
+			}
+			else
+			{
+				Console.WriteLine("Something went wrong when removing duplicates");
+				return false;
+			}
 		}
 
-		private static void RemoveDuplicatesPriority(NpgsqlConnection con)
+		private static async Task<bool> RemoveDuplicatesPriorityAsync(NpgsqlConnection con)
 		{
 			var sql = "DELETE FROM prioritised WHERE ID IN (SELECT ID FROM (SELECT id, ROW_NUMBER() OVER (partition BY link ORDER BY ID) AS RowNumber FROM prioritised) AS T WHERE T.RowNumber > 1);";
 			using var cmd = new NpgsqlCommand(sql, con);
-			var x = cmd.ExecuteNonQuery();
-			Console.WriteLine("Removed {0} duplicates in prioritised", x);
+			var x = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+			if(x != -1)
+			{
+				Console.WriteLine("Removed {0} duplicates in prioritised", x);
+				return true;
+			}
+			else
+			{
+				return false;
+			}
 		}
 
-		public static IEnumerable<string> GetOutstanding(int i)
+		public static async Task<IEnumerable<string>> GetOutstandingAsync(int i)
 		{
 			List<string> outstanding = new List<string>();
-			using var con = new NpgsqlConnection(cs);
-			con.Open();
+			var con = EstablishDBConnection();
+			await con.OpenAsync();
 			StringBuilder sb = new StringBuilder("SELECT * FROM outstanding ORDER BY id DESC LIMIT ");
 			sb.Append(i);
 			sb.Append(";");
@@ -251,32 +313,211 @@ namespace NetScraper
 
 			using var cmd = new NpgsqlCommand(sql, con);
 
-			using NpgsqlDataReader rdr = cmd.ExecuteReader();
+			using NpgsqlDataReader rdr = await cmd.ExecuteReaderAsync();
 
 			while (rdr.Read())
 			{
 				outstanding.Add(rdr.GetString(1));
 			}
-			con.Close();
+			await con.CloseAsync();
 			return outstanding;
 		}
 
-		public static IEnumerable<string> GetPrioritised()
+		public static async Task<IEnumerable<string>> GetPrioritisedAsync()
 		{
 			List<string> prioritised = new List<string>();
-			using var con = new NpgsqlConnection(cs);
-			con.Open();
+			var con = EstablishDBConnection();
+			await con.OpenAsync();
 			string sql = "SELECT * FROM prioritised ORDER BY id DESC LIMIT 20000";
 			using var cmd = new NpgsqlCommand(sql, con);
 
-			using NpgsqlDataReader rdr = cmd.ExecuteReader();
+			using NpgsqlDataReader rdr = await cmd.ExecuteReaderAsync();
 
 			while (rdr.Read())
 			{
 				prioritised.Add(rdr.GetString(1));
 			}
-			con.Close();
+			await con.CloseAsync();
 			return prioritised;
 		}
+
+		public void WriteToServer<T>(IEnumerable<T> data, NpgsqlConnection conn, string DestinationTableName)
+		{
+			try
+			{
+				if (DestinationTableName == null || DestinationTableName == "")
+				{
+					throw new ArgumentOutOfRangeException("DestinationTableName", "Destination table must be set");
+				}
+				PropertyInfo[] properties = typeof(T).GetProperties();
+				int colCount = properties.Length;
+
+				NpgsqlDbType[] types = new NpgsqlDbType[colCount];
+				int[] lengths = new int[colCount];
+				string[] fieldNames = new string[colCount];
+
+				using (var cmd = new NpgsqlCommand("SELECT * FROM " + DestinationTableName + " LIMIT 1", conn))
+				{
+					using (var rdr = cmd.ExecuteReader())
+					{
+						if (rdr.FieldCount != colCount)
+						{
+							throw new ArgumentOutOfRangeException("dataTable", "Column count in Destination Table does not match column count in source table.");
+						}
+						var columns = rdr.GetColumnSchema();
+						for (int i = 0; i < colCount; i++)
+						{
+							types[i] = (NpgsqlDbType)columns[i].NpgsqlDbType;
+							lengths[i] = columns[i].ColumnSize == null ? 0 : (int)columns[i].ColumnSize;
+							fieldNames[i] = columns[i].ColumnName;
+						}
+					}
+
+				}
+				var sB = new StringBuilder(fieldNames[0]);
+				for (int p = 1; p < colCount; p++)
+				{
+					sB.Append(", " + fieldNames[p]);
+				}
+				using (var writer = conn.BeginBinaryImport("COPY " + DestinationTableName + " (" + sB.ToString() + ") FROM STDIN (FORMAT BINARY)"))
+				{
+					foreach (var t in data)
+					{
+						writer.StartRow();
+
+						for (int i = 0; i < colCount; i++)
+						{
+							if (properties[i].GetValue(t) == null)
+							{
+								writer.WriteNull();
+							}
+							else
+							{
+								switch (types[i])
+								{
+									case NpgsqlDbType.Bigint:
+										writer.Write((long)properties[i].GetValue(t), types[i]);
+										break;
+									case NpgsqlDbType.Bit:
+										if (lengths[i] > 1)
+										{
+											writer.Write((byte[])properties[i].GetValue(t), types[i]);
+										}
+										else
+										{
+											writer.Write((byte)properties[i].GetValue(t), types[i]);
+										}
+										break;
+									case NpgsqlDbType.Boolean:
+										writer.Write((bool)properties[i].GetValue(t), types[i]);
+										break;
+									case NpgsqlDbType.Bytea:
+										writer.Write((byte[])properties[i].GetValue(t), types[i]);
+										break;
+									case NpgsqlDbType.Char:
+										if (properties[i].GetType() == typeof(string))
+										{
+											writer.Write((string)properties[i].GetValue(t), types[i]);
+										}
+										else if (properties[i].GetType() == typeof(Guid))
+										{
+											var value = properties[i].GetValue(t).ToString();
+											writer.Write(value, types[i]);
+										}
+
+
+										else if (lengths[i] > 1)
+										{
+											writer.Write((char[])properties[i].GetValue(t), types[i]);
+										}
+										else
+										{
+
+											var s = ((string)properties[i].GetValue(t).ToString()).ToCharArray();
+											writer.Write(s[0], types[i]);
+										}
+										break;
+									case NpgsqlDbType.Time:
+									case NpgsqlDbType.Timestamp:
+									case NpgsqlDbType.TimestampTz:
+									case NpgsqlDbType.Date:
+										writer.Write((DateTime)properties[i].GetValue(t), types[i]);
+										break;
+									case NpgsqlDbType.Double:
+										writer.Write((double)properties[i].GetValue(t), types[i]);
+										break;
+									case NpgsqlDbType.Integer:
+										try
+										{
+											if (properties[i].GetType() == typeof(int))
+											{
+												writer.Write((int)properties[i].GetValue(t), types[i]);
+												break;
+											}
+											else if (properties[i].GetType() == typeof(string))
+											{
+												var swap = Convert.ToInt32(properties[i].GetValue(t));
+												writer.Write((int)swap, types[i]);
+												break;
+											}
+										}
+										catch (Exception ex)
+										{
+											string sh = ex.Message;
+										}
+
+										writer.Write((object)properties[i].GetValue(t), types[i]);
+										break;
+									case NpgsqlDbType.Interval:
+										writer.Write((TimeSpan)properties[i].GetValue(t), types[i]);
+										break;
+									case NpgsqlDbType.Numeric:
+									case NpgsqlDbType.Money:
+										writer.Write((decimal)properties[i].GetValue(t), types[i]);
+										break;
+									case NpgsqlDbType.Real:
+										writer.Write((Single)properties[i].GetValue(t), types[i]);
+										break;
+									case NpgsqlDbType.Smallint:
+
+										try
+										{
+											if (properties[i].GetType() == typeof(byte))
+											{
+												var swap = Convert.ToInt16(properties[i].GetValue(t));
+												writer.Write((short)swap, types[i]);
+												break;
+											}
+											writer.Write((short)properties[i].GetValue(t), types[i]);
+										}
+										catch (Exception ex)
+										{
+											string ms = ex.Message;
+										}
+
+										break;
+									case NpgsqlDbType.Varchar:
+									case NpgsqlDbType.Text:
+										writer.Write((string)properties[i].GetValue(t), types[i]);
+										break;
+									case NpgsqlDbType.Uuid:
+										writer.Write((Guid)properties[i].GetValue(t), types[i]);
+										break;
+									case NpgsqlDbType.Xml:
+										writer.Write((string)properties[i].GetValue(t), types[i]);
+										break;
+								}
+							}
+						}
+					}
+					writer.Complete();
+				}
+			}
+			catch (Exception ex)
+			{
+				throw new Exception("Error executing NpgSqlBulkCopy.WriteToServer().  See inner exception for details", ex);
+			}
+		}
+
 	}
 }

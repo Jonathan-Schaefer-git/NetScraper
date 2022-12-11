@@ -9,7 +9,7 @@ namespace NetScraper
 	internal static class Scraper
 	{
 		private static ScrapingBrowser scrapingbrowser = new ScrapingBrowser();
-
+		private static HtmlWeb web = new HtmlWeb();
 		public static Document GetSources(Document doc)
 		{
 			scrapingbrowser.Timeout = new TimeSpan(2);
@@ -17,7 +17,7 @@ namespace NetScraper
 			return doc;
 		}
 
-		public static Document ScrapFromLink(string url)
+		public static async Task<Document> ScrapFromLinkAsync(string url)
 		{
 			Console.WriteLine("Called Scraper for {0}", url);
 			//Open a new Document
@@ -26,13 +26,12 @@ namespace NetScraper
 			//Set Document parameters
 			//Get HTMLDocument and time it
 			var stopwatch = Stopwatch.StartNew();
-			document.HTML = GetDocument(document);
+			document.HTML = await GetDocument(document);
 			stopwatch.Stop();
 			
 			//Check if Website responded
 			if (document.HTML != null)
 			{
-
 				document.DateTime = DateTime.UtcNow;
 				//Webpage responded
 				document.Status = true;
@@ -85,25 +84,31 @@ namespace NetScraper
 			}
 		}
 
-		public static HtmlDocument? GetDocument(Document document)
+		public static async Task<HtmlDocument>? GetDocument(Document document)
 		{
-			HtmlWeb web = new HtmlWeb();
 			web.PreRequest = delegate (HttpWebRequest webRequest)
 			{
 				webRequest.Timeout = 1000;
+				webRequest.AllowAutoRedirect= false;
 				return true;
 			};
 			try
 			{
-				HtmlDocument doc = web.Load(document.Absoluteurl);
-				if (doc == null)
+				var doc = web.LoadFromWebAsync(document.Absoluteurl.ToString());
+				var x = await doc;
+				if (x == null)
+				{
 					Console.WriteLine("No valid HTML Doc");
-				return doc;
+				}
+				else
+				{
+					return x;
+				}
 			}
 			catch (Exception)
 			{
 				Console.WriteLine("No valid website");
-				return null;
+				return new HtmlDocument();
 			}
 		}
 	}

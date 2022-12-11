@@ -265,7 +265,6 @@ namespace NetScraper
 				
 				if (htmldoc.DocumentNode.OuterHtml != null)
 				{
-
 					return Regex.Replace((RemoveInsignificantHtmlWhiteSpace(htmldoc.DocumentNode.OuterHtml) ?? "").Replace("'", @"\'").Trim(), @"[\r\n]+", " ");
 				}
 				else
