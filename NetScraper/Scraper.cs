@@ -1,6 +1,7 @@
 ﻿using HtmlAgilityPack;
 using ScrapySharp.Network;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text;
 
@@ -33,24 +34,42 @@ namespace NetScraper
 			if (document.HTML != null)
 			{
 				document.DateTime = DateTime.UtcNow;
-				//Webpage responded
+				//Webpage responded set appropriate Status
 				document.Status = true;
-				//Get all linked pages from extracted Document
-				var linklist = Parser.ParseLinks(document);
+				//Set Response time of Website
+				document.ResponseTime = stopwatch.ElapsedMilliseconds;
+
+				var contentstringTask = Task.Run(() => Parser.ConvertDocToString(document));
+				var jslinksTask = Task.Run(() => Parser.RetrieveJSLinks(document));
+				var csslinksTask = Task.Run(() => Parser.RetrieveCSSLinks(document));
+				var linklistTask = Task.Run(() => Parser.ParseLinks(document));
+				var linklist = await linklistTask;
 				if(linklist != null)
 				{
 					linklist.RemoveAll(x => String.IsNullOrEmpty(x));
 				}
 				document.Links = linklist;
-				//Find Prioritised Links
-				document.PrioritisedLinks = Parser.FindPrioritisedLinks(document);
-				document.ImageData = Parser.RetrieveImageData(document);
-				document.ContentString = Parser.ConvertDocToString(document);
-				document.Emails = Parser.GetEmailOutOfString(document);
-				document.ResponseTime = stopwatch.ElapsedMilliseconds;
-				document.JSLinks = Parser.RetrieveJSLinks(document);
-				document.CSSLinks = Parser.RetrieveCSSLinks(document);
-				if(document.CSSLinks != null && document.JSLinks != null)
+
+				//Tasks that are dependent on the result of Linkslist
+				var prioritisedlinksTask = Task.Run(() => Parser.FindPrioritisedLinks(document));
+				var imagedataTask = Task.Run(() => Parser.RetrieveImageData(document));
+				
+				//emailTask is reliant on the Contentstring
+				document.ContentString = await contentstringTask;
+				var emailTask = Task.Run(() => Parser.GetEmailOutOfString(document));
+
+				//Wait for all Tasks to finish execution
+				await Task.WhenAll(jslinksTask, csslinksTask, emailTask, prioritisedlinksTask, imagedataTask);
+				
+				//Set properties
+				document.PrioritisedLinks = prioritisedlinksTask.Result;
+				document.CSSLinks = csslinksTask.Result;
+				document.Emails= emailTask.Result;
+				document.JSLinks= jslinksTask.Result;
+				document.ImageData = imagedataTask.Result;
+				
+				//Get JS & CSS Links Count
+				if (document.CSSLinks != null && document.JSLinks != null)
 				{
 					document.CSSCount = document.CSSLinks.Count();
 					document.JSCount = document.JSLinks.Count();
@@ -92,6 +111,7 @@ namespace NetScraper
 				webRequest.AllowAutoRedirect= false;
 				return true;
 			};
+
 			try
 			{
 				var doc = web.LoadFromWebAsync(document.Absoluteurl.ToString());
@@ -110,6 +130,7 @@ namespace NetScraper
 				Console.WriteLine("No valid website");
 				return new HtmlDocument();
 			}
+			return null;
 		}
 	}
 }

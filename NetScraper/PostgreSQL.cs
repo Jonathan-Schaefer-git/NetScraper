@@ -1,5 +1,6 @@
 ﻿using Npgsql;
 using NpgsqlTypes;
+using System.Data.SqlTypes;
 using System.Reflection;
 using System.Text;
 
@@ -11,11 +12,10 @@ namespace NetScraper
 		private static string cs = "Host=192.168.2.220;Username=postgres;Password=1598;Database=Netscraper";
 		public static async Task<bool> ResetOutstandingAsync()
 		{
-			using var con = new NpgsqlConnection(cs);
+			var con = EstablishDBConnection();
 			await con.OpenAsync();
 			using var cmd = new NpgsqlCommand();
-			cmd.Connection = con;
-
+			cmd.Connection= con;
 			cmd.CommandText = "DROP TABLE IF EXISTS outstanding";
 			var dropstate = await cmd.ExecuteNonQueryAsync();
 
@@ -23,8 +23,10 @@ namespace NetScraper
 			Console.WriteLine("Resetted outstanding");
 			var createstate = await cmd.ExecuteNonQueryAsync();
 			await con.CloseAsync();
+			await con.DisposeAsync();
 			if(dropstate != -1 && createstate != -1)
 			{
+				Console.WriteLine("Resetting outstanding with true");
 				return true;
 			}
 			else
@@ -38,7 +40,7 @@ namespace NetScraper
 			var con = EstablishDBConnection();
 			using var cmd = new NpgsqlCommand();
 			cmd.Connection = con;
-
+			await con.OpenAsync();
 			cmd.CommandText = "DROP TABLE IF EXISTS prioritised";
 			var x = await cmd.ExecuteNonQueryAsync();
 
@@ -46,7 +48,8 @@ namespace NetScraper
 			Console.WriteLine("Resetted prioritised");
 			var state = await cmd.ExecuteNonQueryAsync();
 			await con.CloseAsync();
-			if(state != -1 && x != -1)
+			await con.DisposeAsync();
+			if (state != -1 && x != -1)
 			{
 				return true;
 			}
@@ -67,7 +70,7 @@ namespace NetScraper
 			await con.OpenAsync();
 
 			var resetstate = await ResetOutstandingAsync();
-
+			var rowcount = 0;
 			var sql = @"INSERT INTO outstanding(name) VALUES(@name)";
 			foreach (var item in outstanding)
 			{
@@ -76,22 +79,21 @@ namespace NetScraper
 					var cmd = new NpgsqlCommand(sql, con);
 					cmd.Parameters.AddWithValue("name", item);
 					await cmd.PrepareAsync();
-					await cmd.ExecuteNonQueryAsync();
+					rowcount += await cmd.ExecuteNonQueryAsync();
 				}
 				else
 				{
 					var cmd = new NpgsqlCommand(sql, con);
 					cmd.Parameters.AddWithValue("name", "");
 					await cmd.PrepareAsync();
-					await cmd.ExecuteNonQueryAsync();
+					rowcount += await cmd.ExecuteNonQueryAsync();
 				}
 			}
 			var duplicatestate = await RemoveDuplicatesAsync(con);
 			await con.CloseAsync();
-			if (duplicatestate != false && resetstate != false)
-			{
+			await con.DisposeAsync();
+			if(rowcount != -1)
 				return true;
-			}
 			else
 			{
 				return false;
@@ -144,14 +146,14 @@ namespace NetScraper
 			var duplicatestate = await RemoveDuplicatesPriorityAsync(con);
 
 			await con.CloseAsync();
-
+			await con.DisposeAsync();
 			return true;
 		}
 
 		public static async Task<long> GetScrapingCount()
 		{
 			using var con = new NpgsqlConnection(cs);
-			con.Open();
+			await con.OpenAsync();
 			var sql = "SELECT * FROM maindata WHERE ID = (SELECT MAX(id) FROM maindata)";
 			var cmd = new NpgsqlCommand(sql, con);
 			using NpgsqlDataReader rdr = await cmd.ExecuteReaderAsync();
@@ -159,14 +161,103 @@ namespace NetScraper
 			await rdr.ReadAsync();
 			var x = rdr.GetInt64(0);
 			
-			con.Close();
+			await con.CloseAsync();
+			await con.DisposeAsync();
 			return x;
 		}
-
-		public static async Task PushDocumentAsync(Document doc)
+		public static async Task<bool> PushDocumentListAsync(List<Document> documents)
 		{
-			using var con = new NpgsqlConnection(cs);
-			con.Open();
+			var con = EstablishDBConnection();
+			await con.OpenAsync();
+			var sql = @"INSERT INTO maindata(status, url, datetime, emails, csscount, jscount, approximatesize, links, contentstring, imagedescriptions, imagelinks, imagerelativeposition) VALUES(@status, @url, @datetime, @emails, @csscount, @jscount, @approximatesize, @links, @contentstring, @imagedescriptions ,@imagelinks, @imagerelativeposition)";
+
+			var cmd = new NpgsqlCommand(sql, con);
+			foreach (var doc in documents)
+			{
+				var imagealts = new List<string>();
+				var imagelinks = new List<string>();
+				var imagepositions = new List<string>();
+				if (doc.ContentString == null || doc.ImageData == null)
+				{
+					return false;
+				}
+				foreach (var item in doc.ImageData)
+				{
+					if (item.Alt != null)
+					{
+						imagealts.Add(item.Alt);
+					}
+					else
+					{
+						imagealts.Add("");
+					}
+					if (item.Link != null)
+					{
+						imagelinks.Add(item.Link);
+					}
+					else
+					{
+						imagelinks.Add("");
+					}
+					if (item.Relativelocation != null)
+					{
+						imagepositions.Add(item.Relativelocation);
+					}
+					else
+					{
+						imagepositions.Add("");
+					}
+				}
+				cmd.Parameters.Clear();
+				cmd.Parameters.AddWithValue(@"status", doc.Status);
+				//This Null Reference check is useless but was added as a safety precussion
+				if (doc.Absoluteurl != null)
+				{
+					cmd.Parameters.AddWithValue(@"url", doc.Absoluteurl.ToString());
+				}
+				else
+				{
+					cmd.Parameters.AddWithValue(@"url", "");
+					throw new Exception("Website was added without Value");
+				}
+				cmd.Parameters.AddWithValue(@"datetime", doc.DateTime.ToString());
+				if (doc.Emails == null)
+				{
+					cmd.Parameters.AddWithValue(@"emails", "");
+				}
+				else
+				{
+					cmd.Parameters.AddWithValue(@"emails", doc.Emails);
+				}
+				cmd.Parameters.AddWithValue(@"csscount", doc.CSSCount);
+				cmd.Parameters.AddWithValue(@"jscount", doc.JSCount);
+				cmd.Parameters.AddWithValue(@"approximatesize", doc.ApproxByteSize);
+
+				if (doc.Links != null)
+				{
+					cmd.Parameters.AddWithValue(@"links", doc.Links);
+				}
+				else
+				{
+					cmd.Parameters.AddWithValue(@"links", new List<string>());
+				}
+				cmd.Parameters.AddWithValue(@"contentstring", doc.ContentString);
+				cmd.Parameters.AddWithValue(@"imagedescriptions", imagealts);
+				cmd.Parameters.AddWithValue(@"imagelinks", imagelinks);
+				cmd.Parameters.AddWithValue(@"imagerelativeposition", imagepositions);
+				await cmd.PrepareAsync();
+				var state = await cmd.ExecuteNonQueryAsync();
+				await con.CloseAsync();
+				await con.DisposeAsync();
+
+				return true;
+			}
+			return false;
+		}
+		public static async Task<bool> PushDocumentAsync(Document doc)
+		{
+			var con = EstablishDBConnection();
+			await con.OpenAsync();
 			var sql = @"INSERT INTO maindata(status, url, datetime, emails, csscount, jscount, approximatesize, links, contentstring, imagedescriptions, imagelinks, imagerelativeposition) VALUES(@status, @url, @datetime, @emails, @csscount, @jscount, @approximatesize, @links, @contentstring, @imagedescriptions ,@imagelinks, @imagerelativeposition)";
 
 			var cmd = new NpgsqlCommand(sql, con);
@@ -175,7 +266,7 @@ namespace NetScraper
 			var imagepositions = new List<string>();
 			if (doc.ContentString == null || doc.ImageData == null)
 			{
-				return;
+				return false;
 			}
 			foreach (var item in doc.ImageData)
 			{
@@ -241,8 +332,17 @@ namespace NetScraper
 			cmd.Parameters.AddWithValue(@"imagelinks", imagelinks);
 			cmd.Parameters.AddWithValue(@"imagerelativeposition", imagepositions);
 			await cmd.PrepareAsync();
-			await cmd.ExecuteNonQueryAsync();
+			var state = await cmd.ExecuteNonQueryAsync();
 			await con.CloseAsync();
+			await con.DisposeAsync();
+			if (state != -1)
+			{
+				return true;
+			}
+			else
+			{
+				return false;
+			}
 		}
 
 		public static async Task<bool> ResetMainDataAsync()
@@ -259,7 +359,8 @@ namespace NetScraper
 			Console.WriteLine("Resetted maindata");
 			var x = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
 			await con.CloseAsync().ConfigureAwait(false);
-			if(x != -1)
+			await con.DisposeAsync();
+			if (x != -1)
 			{
 				return true;
 			}
@@ -275,7 +376,7 @@ namespace NetScraper
 			var x = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
 			if (x != -1)
 			{
-				Console.WriteLine("Removed {0} duplicates in prioritised", x);
+				Console.WriteLine("Removed {0} duplicates in outstanding", x);
 				return true;
 			}
 			else
@@ -305,21 +406,20 @@ namespace NetScraper
 		{
 			List<string> outstanding = new List<string>();
 			var con = EstablishDBConnection();
-			await con.OpenAsync();
+			con.Open();
 			StringBuilder sb = new StringBuilder("SELECT * FROM outstanding ORDER BY id DESC LIMIT ");
 			sb.Append(i);
-			sb.Append(";");
+			sb.Append(";");	
 			string sql = sb.ToString();
 
 			using var cmd = new NpgsqlCommand(sql, con);
 
-			using NpgsqlDataReader rdr = await cmd.ExecuteReaderAsync();
-
+			using NpgsqlDataReader rdr = cmd.ExecuteReader();
 			while (rdr.Read())
 			{
 				outstanding.Add(rdr.GetString(1));
 			}
-			await con.CloseAsync();
+			con.Close();
 			return outstanding;
 		}
 
@@ -331,16 +431,16 @@ namespace NetScraper
 			string sql = "SELECT * FROM prioritised ORDER BY id DESC LIMIT 20000";
 			using var cmd = new NpgsqlCommand(sql, con);
 
-			using NpgsqlDataReader rdr = await cmd.ExecuteReaderAsync();
+			using NpgsqlDataReader rdr = cmd.ExecuteReader();
 
 			while (rdr.Read())
 			{
 				prioritised.Add(rdr.GetString(1));
 			}
-			await con.CloseAsync();
+			con.Close();
 			return prioritised;
 		}
-
+		/*
 		public void WriteToServer<T>(IEnumerable<T> data, NpgsqlConnection conn, string DestinationTableName)
 		{
 			try
@@ -518,6 +618,6 @@ namespace NetScraper
 				throw new Exception("Error executing NpgSqlBulkCopy.WriteToServer().  See inner exception for details", ex);
 			}
 		}
-
+		*/
 	}
 }

@@ -10,6 +10,7 @@ namespace NetScraper
 		public int SimultaneousPool { get; set; }
 		public bool ShouldRun { get; set; }
 		public long ScrapesCompleted { get; set; }
+		public int BatchesCompleted { get; set; }
 	}
 	public static class LogWriter
 	{
@@ -31,6 +32,8 @@ namespace NetScraper
 					writer.WriteValue(CoreHandler.Shouldrun);
 					writer.WritePropertyName("ScrapesCompleted");
 					writer.WriteValue(CoreHandler.Scrapes);
+					writer.WritePropertyName("BatchesCompleted");
+					writer.WriteValue(CoreHandler.Batch);
 					writer.WriteEndObject();
 					await writer.CloseAsync();
 					return true;
@@ -51,6 +54,5 @@ namespace NetScraper
 				return setting;
 			}
 		}
-		
 	}
 }

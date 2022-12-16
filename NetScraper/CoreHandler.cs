@@ -1,4 +1,5 @@
-﻿using MongoDB.Driver;
+﻿using System.Threading.Tasks;
+
 
 namespace NetScraper
 {
@@ -15,9 +16,12 @@ namespace NetScraper
 		public static string fileSettings = Path.Combine(filepath, "settings.json");
 		public static string fileNameCSV = Path.Combine(filepath, "log.csv");
 
-		private static async void Main()
+		private static async Task Main()
 		{
 			Console.WriteLine(".NETScraper developed by Jona4Dev");
+			Console.WriteLine("Reading Settings from {0}", fileSettings);
+			var settings = await LogWriter.LoadJsonAsync();
+			Batch = settings.BatchesCompleted;
 			Console.WriteLine("https://github.com/Jona4Play/NetScraper");
 			Console.WriteLine("=========================================");
 			Console.WriteLine("Type 'help' to get the list of commands");
@@ -35,9 +39,9 @@ namespace NetScraper
 
 				case "new":
 					Console.WriteLine("Rerolling Outstanding");
-					await PostgreSQL.ResetOutstandingAsync();
-					await PostgreSQL.ResetMainDataAsync();
-					await PostgreSQL.ResetPrioritisedAsync();
+					Task<bool>[] resettasks = new Task<bool>[] { PostgreSQL.ResetOutstandingAsync(), PostgreSQL.ResetMainDataAsync(), PostgreSQL.ResetPrioritisedAsync() };
+					await Task.WhenAll(resettasks);
+					Console.WriteLine("Reset Tables");
 					break;
 
 				case "start":
@@ -46,10 +50,10 @@ namespace NetScraper
 			}
 
 			List<string> list = new List<string>();
-			list.Add("https://sn.wikipedia.org/wiki/");
 			list.Add("https://www.wikipedia.org/");
 			list.Add("https://de.wikipedia.org/");
-			PostgreSQL.PushOutstandingAsync(list);
+			var pushstate = await PostgreSQL.PushOutstandingAsync(list);
+			Console.WriteLine("State of start link push: " + pushstate);
 			StartedScraping = DateTime.Now;
 			await LogWriter.WriteSettingsJsonAsync();
 
@@ -64,21 +68,45 @@ namespace NetScraper
 			List<string> outstandingLinks = new List<string>();
 			List<string> prioritisedLinks = new List<string>();
 			List<string> outstanding = new List<string>();
-
-			outstanding.AddRange(await PostgreSQL.GetPrioritisedAsync());
-			outstanding.AddRange(await PostgreSQL.GetOutstandingAsync(BatchLimit - outstanding.Count));
-			Console.WriteLine("Outstanding Count: " + outstanding.Count());
 			while (Shouldrun)
 			{
+
 				Console.WriteLine("Started Cycle");
+
+				//Get Links to be scraped from DB up to a maximum of 20k strings per batch
+				
+				outstanding.AddRange(await PostgreSQL.GetPrioritisedAsync());
+				outstanding.AddRange(await PostgreSQL.GetOutstandingAsync(BatchLimit - outstanding.Count()));
+				Console.WriteLine("Outstanding Count: " + outstanding.Count());
+
+				//Check settings (Used for web interface)
 				var setting = await LogWriter.LoadJsonAsync();
 				Shouldrun = setting.ShouldRun;
 				SimultaneousPool = setting.SimultaneousPool;
 				Console.WriteLine("Concurreny Pool is: " + SimultaneousPool);
+				
+				var docs = new List<Document>();
+				foreach (var link in outstanding)
+				{
+					Console.WriteLine("Checkpoint A");
+					try
+					{
+						docs.Add(await Scraper.ScrapFromLinkAsync(link));
+					}
+					catch (Exception)
+					{
+						throw;
+					}
+					
+					Console.WriteLine("Checkpoint B");
+				}
+				Console.WriteLine("Worked");
+				
+				/*
 				if (outstanding != null)
 				{
 					var partionedLists = outstanding.Partition(SimultaneousPool);
-					Console.WriteLine("Partitioned Lists: " + partionedLists.Count());
+					Console.WriteLine("Partitioned Lists: " + partionedLists.Count());	
 					foreach (var list in partionedLists)
 					{
 						var scrapingTask = await Scraping(list);
@@ -94,6 +122,7 @@ namespace NetScraper
 								prioritisedLinks.AddRange(document.PrioritisedLinks);
 							}
 						}
+						await PostgreSQL.PushDocumentListAsync(scrapingTask);
 					}
 					foreach (var link in outstanding)
 					{
@@ -104,41 +133,40 @@ namespace NetScraper
 					List<string> outstandingLinksnd = new HashSet<string>(outstandingLinks).ToList();
 					List<string> prioritisedLinksnd = new HashSet<string>(prioritisedLinks).ToList();
 
+					var pushtask = TriggerPushLinksAsync(outstandingLinksnd, prioritisedLinksnd);
+					var getscrapecount = PostgreSQL.GetScrapingCount();
 					Console.WriteLine("Found {0} Links", outstandingLinksnd.Count);
 					Console.WriteLine("#Prioritised Links {0}", prioritisedLinksnd.Count);
-					TriggerPushLinks(outstandingLinksnd, prioritisedLinksnd);
+					await Task.WhenAll(pushtask, getscrapecount);
+					var state = pushtask.Result;
+					Scrapes = getscrapecount.Result;
 					Batch++;
-					Scrapes = await PostgreSQL.GetScrapingCount();
 					await LogWriter.WriteSettingsJsonAsync();
+					
 				}
 				else
 				{
 					Console.WriteLine("No links to Scrap");
 				}
+				*/
 			}
 		}
 		
 		private static async Task<List<Document>> Scraping(IEnumerable<string> links)
 		{
-			Console.WriteLine("Control Point A");
 			var tasks = links.Select(x => Task.Run(() => Scraper.ScrapFromLinkAsync(x))).ToArray();
-			Console.WriteLine("Control Point B");
+			Console.WriteLine("Checkpoint A");
 			await Task.WhenAll(tasks);
-			
-			
+			Console.WriteLine("Checkpoint B");
 			var documents = new List<Document>();
-			
-			foreach (var task in tasks)
+			foreach (var item in tasks)
 			{
-				Task.Run(() => PostgreSQL.PushDocumentAsync(task.Result));
-				documents.Add(task.Result);
+				documents.Add(item.Result);
 			}
-			
-			Console.WriteLine("Leaving Scraping Method");
 			return documents;
 		}
 
-		private static async Task<bool> TriggerPushLinks(List<string> outstandingLinks, List<string> prioritisedLinks)
+		private static async Task<bool> TriggerPushLinksAsync(List<string> outstandingLinks, List<string> prioritisedLinks)
 		{
 			Task<bool>[] tasks = new Task<bool>[1];
 			tasks[0] = PostgreSQL.PushOutstandingAsync(outstandingLinks);
@@ -161,16 +189,6 @@ namespace NetScraper
 		{
 			for (int i = 0; i < Math.Ceiling(source.Count / (Double)size); i++)
 				yield return new List<T>(source.Skip(size * i).Take(size));
-		}
-
-		private static List<IEnumerable<string>> ListSplitter(List<string> Source, int size)
-		{
-			List<IEnumerable<string>> listOfLists = new List<IEnumerable<string>>();
-			for (int i = 0; i < Source.Count(); i += size)
-			{
-				listOfLists.Add(Source.Skip(i).Take(size));
-			}
-			return listOfLists;
 		}
 	}
 }
