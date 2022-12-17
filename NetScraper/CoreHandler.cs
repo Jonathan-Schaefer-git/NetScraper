@@ -1,4 +1,7 @@
 ﻿using MongoDB.Driver.Linq;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 
 
@@ -7,13 +10,14 @@ namespace NetScraper
 	internal static class CoreHandler
 	{
 		public static DateTime StartedScraping = DateTime.Now;
-		public static int BatchLimit = 20000;
+		public static int BatchLimit = 10000;
 		public static int Batch = 0;
 		public static long Scrapes = 0;
-		public static int SimultaneousPool = 100;
+		public static int SimultaneousPool = 50;
 		public static bool Shouldrun = true;
+		public static string ConnectionString = "Host=localhost;Username=postgres;Password=1598;Database=Netscraper";
 		public static string filepath = Directory.GetParent(Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName).Parent.FullName;
-		public static string fileName = Path.Combine(filepath, "log.json");
+		public static string fileBuffer = Path.Combine(filepath, "links.json");
 		public static string fileSettings = Path.Combine(filepath, "settings.json");
 		public static string fileNameCSV = Path.Combine(filepath, "log.csv");
 
@@ -26,43 +30,65 @@ namespace NetScraper
 			Console.WriteLine("https://github.com/Jona4Play/NetScraper");
 			Console.WriteLine("=========================================");
 			Console.WriteLine("Type 'help' to get the list of commands");
-			var input = Console.ReadLine();
-
-			switch (input)
+			var startlinks = new List<string>();
+			while(true)
 			{
-				default:
-					Console.WriteLine("Unknown Command use 'help' to get the list of valid commands");
-					break;
+				Console.WriteLine("=========================================");
+				Console.WriteLine("Enter a Command: ");
+				Console.Write(">");
+				var input = Console.ReadLine();
 
-				case "help":
-					Console.WriteLine();
-					break;
+				switch (input)
+				{
+					default:
+						Console.WriteLine("Unknown Command use 'help' to get the list of valid commands");
+						break;
 
-				case "new":
-					Console.WriteLine("Rerolling Outstanding");
-					Task<bool>[] resettasks = new Task<bool>[] { PostgreSQL.ResetOutstandingAsync(), PostgreSQL.ResetMainDataAsync(), PostgreSQL.ResetPrioritisedAsync() };
-					await Task.WhenAll(resettasks);
-					Console.WriteLine("Reset Tables");
-					break;
+					case "help":
+						Console.WriteLine("new - Reset all tables and start scraping from default stack");
+						Console.WriteLine("start - Continue from existing stack");
+						Console.WriteLine("help - Supply this menu");
+						break;
 
-				case "start":
-					Console.WriteLine();
-					break;
+					case "start":
+						Console.WriteLine();
+						StartedScraping = DateTime.Now;
+						await LogWriter.WriteSettingsJsonAsync();
+						var state = await RunScraper(startlinks);
+						if (state)
+						{
+							Console.WriteLine("Scraping was stopped through interaction with the settings file");
+						}
+						break;
+					case "load":
+						Console.WriteLine("Loading Links from file");
+						startlinks = await LogWriter.ReadLinkBuffer();
+						Console.WriteLine("Loaded {0} links", startlinks.Count);
+						break;
+
+					case "setup":
+						var writestate = await LogWriter.WriteLinkBuffer(startlinks);
+						Console.WriteLine("Writing to file state: {0}",writestate);
+						break;
+					case "init":
+						Console.WriteLine("Supplying Program with start links");
+						startlinks.Add("https://www.wikipedia.org/");
+						startlinks.Add("https://de.wikipedia.org/");
+						startlinks.Add("https://got.wikipedia.org/");
+						startlinks.Add("https://play.google.com/store/apps/details?id=org.wikipedia&referrer=utm_source%3Dportal%26utm_medium%3Dbutton%26anid%3Dadmob");
+						break;
+
+					case "reset":
+						Console.WriteLine("Reseting Database");
+						Task<bool>[] resettasks = new Task<bool>[] { PostgreSQL.ResetOutstandingAsync(), PostgreSQL.ResetMainDataAsync(), PostgreSQL.ResetPrioritisedAsync() };
+						await Task.WhenAll(resettasks);
+						Console.WriteLine("Reset Tables");
+						break;
+				}
 			}
-
-			List<string> list = new List<string>();
-			list.Add("https://www.wikipedia.org/");
-			list.Add("https://de.wikipedia.org/");
-			list.Add("https://got.wikipedia.org/");
-			var pushstate = await PostgreSQL.PushOutstandingAsync(list);
-			Console.WriteLine("State of start link push: " + pushstate);
-			StartedScraping = DateTime.Now;
-			await LogWriter.WriteSettingsJsonAsync();
-
-			await RunScraper();
 		}
 
-		private static async Task RunScraper()
+		private static async Task<bool> RunScraper(List<string> startlinks)
 		{
 			//Called RunScraper
 			Console.WriteLine("Called Scraping Method");
@@ -73,16 +99,17 @@ namespace NetScraper
 			while (Shouldrun)
 			{
 				Console.WriteLine("Started Cycle");
-
 				//Get Links to be scraped from DB up to a maximum of 20k strings per batch
-				outstanding.AddRange(await PostgreSQL.GetPrioritisedAsync());
-				outstanding.AddRange(await PostgreSQL.GetOutstandingAsync(BatchLimit - outstanding.Count()));
+				outstanding.AddRange(startlinks);
+				outstanding.AddRange(prioritisedLinks);
+				
 				Console.WriteLine("Outstanding Count: " + outstanding.Count());
 
 				//Check settings (Used for web interface)
 				var setting = await LogWriter.LoadJsonAsync();
 				Shouldrun = setting.ShouldRun;
 				SimultaneousPool = setting.SimultaneousPool;
+
 				Console.WriteLine("Concurreny Pool is: " + SimultaneousPool);
 				
 				if (outstanding != null)
@@ -91,8 +118,10 @@ namespace NetScraper
 					Console.WriteLine("Partitioned Lists: " + partionedLists.Count());
 					foreach (var list in partionedLists)
 					{
+						var timer = Stopwatch.StartNew();
 						var documents = await Scraping(list);
-
+						timer.Stop();
+						Console.WriteLine("Scraping took: " + timer.ElapsedMilliseconds + "ms");
 						foreach (var document in documents)
 						{
 							if (document.Links is not null)
@@ -118,46 +147,51 @@ namespace NetScraper
 					List<string> outstandingLinksnd = new HashSet<string>(outstandingLinks).ToList();
 					List<string> prioritisedLinksnd = new HashSet<string>(prioritisedLinks).ToList();
 
-					var pushtask = TriggerPushLinksAsync(outstandingLinksnd, prioritisedLinksnd);
+					
+					if (prioritisedLinksnd.Count > BatchLimit)
+					{
+						prioritisedLinksnd.RemoveRange(BatchLimit, prioritisedLinksnd.Count - BatchLimit);
+					}
+					else
+					{
+						if (outstandingLinksnd.Count > BatchLimit)
+						{
+							prioritisedLinksnd.AddRange(outstandingLinksnd.GetRange(prioritisedLinksnd.Count, BatchLimit - prioritisedLinksnd.Count));
+						}
+					}
+					Console.WriteLine("Link Count for this batch: " + prioritisedLinksnd.Count);
 					var getscrapecount = PostgreSQL.GetScrapingCount();
 					Console.WriteLine("Found {0} Links", outstandingLinksnd.Count);
-					Console.WriteLine("#Prioritised Links {0}", prioritisedLinksnd.Count);
+					Console.WriteLine("Found {0} Prioritised Links", prioritisedLinksnd.Count);
 
-					var state = await pushtask;
+					prioritisedLinks = prioritisedLinksnd;
+
 					Scrapes = await getscrapecount;
 					Batch++;
 					await LogWriter.WriteSettingsJsonAsync();
-					
+					var writestate = await LogWriter.WriteLinkBuffer(prioritisedLinksnd);
+					if (writestate)
+					{
+						Console.WriteLine("Writing buffer was successful");
+					}
+					else
+					{
+						Console.WriteLine("Writing buffer failed");
+					}
 				}
 				else
 				{
 					Console.WriteLine("No links to Scrap");
 				}
-				
 			}
+			return true;
 		}
-		/*
-				var docs = new List<Document>();
-				foreach (var link in outstanding)
-				{
-					Console.WriteLine("Checkpoint A");
-					try
-					{
-						docs.Add(await Scraper.ScrapFromLinkAsync(link));
-					}
-					catch (Exception)
-					{
-						throw;
-					}
-					
-					Console.WriteLine("Checkpoint B");
-				}
-				Console.WriteLine("Worked");
-				*/
+		
 		private static async Task<List<Document>> Scraping(IEnumerable<string> links)
 		{
 			var tasks = links.Select(x => Task.Run(() => Scraper.ScrapFromLinkAsync(x))).ToArray();
 			await Task.WhenAll(tasks);
+
 			var documents = new List<Document>();
 			
 			foreach (var item in tasks)

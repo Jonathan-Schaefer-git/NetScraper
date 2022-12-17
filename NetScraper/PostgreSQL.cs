@@ -8,8 +8,16 @@ namespace NetScraper
 {
 	internal class PostgreSQL
 	{
+		private static string Connectionstring
+		{
+			get
+			{
+				return cs;
+			}
+		}
+
 		private static string removeduplicate = "DELETE FROM outstanding WHERE ID IN (SELECT ID FROM (SELECT id, ROW_NUMBER() OVER (partition BY name ORDER BY ID) AS RowNumber FROM outstanding) AS T WHERE T.RowNumber > 1);";
-		private static string cs = "Host=192.168.2.220;Username=postgres;Password=1598;Database=Netscraper";
+		public static string cs = "Host=192.168.2.220;Username=postgres;Password=1598;Database=Netscraper";
 		public static async Task<bool> ResetOutstandingAsync()
 		{
 			var con = EstablishDBConnection();
@@ -91,9 +99,11 @@ namespace NetScraper
 			}
 			var duplicatestate = await RemoveDuplicatesAsync(con);
 			await con.CloseAsync();
-			await con.DisposeAsync();
+			con.Dispose();
 			if(rowcount != -1)
+			{
 				return true;
+			}
 			else
 			{
 				return false;
@@ -146,7 +156,7 @@ namespace NetScraper
 			var duplicatestate = await RemoveDuplicatesPriorityAsync(con);
 
 			await con.CloseAsync();
-			await con.DisposeAsync();
+			con.Dispose();
 			return true;
 		}
 
@@ -257,10 +267,17 @@ namespace NetScraper
 				cmd.Parameters.AddWithValue(@"imagelinks", imagelinks);
 				cmd.Parameters.AddWithValue(@"imagerelativeposition", imagepositions);
 				await cmd.PrepareAsync();
-				counter += await cmd.ExecuteNonQueryAsync();
-				
+				try
+				{
+					counter += await cmd.ExecuteNonQueryAsync();
+				}
+				catch (Exception)
+				{
+					counter -= 1;
+				}
 			}
 			con.Close();
+			con.Dispose();
 			Console.WriteLine("Rows inserted into Maindata: " + counter);
 			if(counter is -1)
 			{
@@ -377,7 +394,7 @@ namespace NetScraper
 			Console.WriteLine("Resetted maindata");
 			var x = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
 			await con.CloseAsync().ConfigureAwait(false);
-			await con.DisposeAsync();
+			con.Dispose();
 			if (x != -1)
 			{
 				return true;
@@ -424,7 +441,7 @@ namespace NetScraper
 		{
 			List<string> outstanding = new List<string>();
 			var con = EstablishDBConnection();
-			con.Open();
+			await con.OpenAsync();
 			StringBuilder sb = new StringBuilder("SELECT * FROM outstanding ORDER BY id DESC LIMIT ");
 			sb.Append(i);
 			sb.Append(";");	
@@ -437,7 +454,8 @@ namespace NetScraper
 			{
 				outstanding.Add(rdr.GetString(1));
 			}
-			con.Close();
+			await con.CloseAsync();
+			con.Dispose();
 			return outstanding;
 		}
 
@@ -456,186 +474,8 @@ namespace NetScraper
 				prioritised.Add(rdr.GetString(1));
 			}
 			con.Close();
+			con.Dispose();
 			return prioritised;
 		}
-		/*
-		public void WriteToServer<T>(IEnumerable<T> data, NpgsqlConnection conn, string DestinationTableName)
-		{
-			try
-			{
-				if (DestinationTableName == null || DestinationTableName == "")
-				{
-					throw new ArgumentOutOfRangeException("DestinationTableName", "Destination table must be set");
-				}
-				PropertyInfo[] properties = typeof(T).GetProperties();
-				int colCount = properties.Length;
-
-				NpgsqlDbType[] types = new NpgsqlDbType[colCount];
-				int[] lengths = new int[colCount];
-				string[] fieldNames = new string[colCount];
-
-				using (var cmd = new NpgsqlCommand("SELECT * FROM " + DestinationTableName + " LIMIT 1", conn))
-				{
-					using (var rdr = cmd.ExecuteReader())
-					{
-						if (rdr.FieldCount != colCount)
-						{
-							throw new ArgumentOutOfRangeException("dataTable", "Column count in Destination Table does not match column count in source table.");
-						}
-						var columns = rdr.GetColumnSchema();
-						for (int i = 0; i < colCount; i++)
-						{
-							types[i] = (NpgsqlDbType)columns[i].NpgsqlDbType;
-							lengths[i] = columns[i].ColumnSize == null ? 0 : (int)columns[i].ColumnSize;
-							fieldNames[i] = columns[i].ColumnName;
-						}
-					}
-
-				}
-				var sB = new StringBuilder(fieldNames[0]);
-				for (int p = 1; p < colCount; p++)
-				{
-					sB.Append(", " + fieldNames[p]);
-				}
-				using (var writer = conn.BeginBinaryImport("COPY " + DestinationTableName + " (" + sB.ToString() + ") FROM STDIN (FORMAT BINARY)"))
-				{
-					foreach (var t in data)
-					{
-						writer.StartRow();
-
-						for (int i = 0; i < colCount; i++)
-						{
-							if (properties[i].GetValue(t) == null)
-							{
-								writer.WriteNull();
-							}
-							else
-							{
-								switch (types[i])
-								{
-									case NpgsqlDbType.Bigint:
-										writer.Write((long)properties[i].GetValue(t), types[i]);
-										break;
-									case NpgsqlDbType.Bit:
-										if (lengths[i] > 1)
-										{
-											writer.Write((byte[])properties[i].GetValue(t), types[i]);
-										}
-										else
-										{
-											writer.Write((byte)properties[i].GetValue(t), types[i]);
-										}
-										break;
-									case NpgsqlDbType.Boolean:
-										writer.Write((bool)properties[i].GetValue(t), types[i]);
-										break;
-									case NpgsqlDbType.Bytea:
-										writer.Write((byte[])properties[i].GetValue(t), types[i]);
-										break;
-									case NpgsqlDbType.Char:
-										if (properties[i].GetType() == typeof(string))
-										{
-											writer.Write((string)properties[i].GetValue(t), types[i]);
-										}
-										else if (properties[i].GetType() == typeof(Guid))
-										{
-											var value = properties[i].GetValue(t).ToString();
-											writer.Write(value, types[i]);
-										}
-
-
-										else if (lengths[i] > 1)
-										{
-											writer.Write((char[])properties[i].GetValue(t), types[i]);
-										}
-										else
-										{
-
-											var s = ((string)properties[i].GetValue(t).ToString()).ToCharArray();
-											writer.Write(s[0], types[i]);
-										}
-										break;
-									case NpgsqlDbType.Time:
-									case NpgsqlDbType.Timestamp:
-									case NpgsqlDbType.TimestampTz:
-									case NpgsqlDbType.Date:
-										writer.Write((DateTime)properties[i].GetValue(t), types[i]);
-										break;
-									case NpgsqlDbType.Double:
-										writer.Write((double)properties[i].GetValue(t), types[i]);
-										break;
-									case NpgsqlDbType.Integer:
-										try
-										{
-											if (properties[i].GetType() == typeof(int))
-											{
-												writer.Write((int)properties[i].GetValue(t), types[i]);
-												break;
-											}
-											else if (properties[i].GetType() == typeof(string))
-											{
-												var swap = Convert.ToInt32(properties[i].GetValue(t));
-												writer.Write((int)swap, types[i]);
-												break;
-											}
-										}
-										catch (Exception ex)
-										{
-											string sh = ex.Message;
-										}
-
-										writer.Write((object)properties[i].GetValue(t), types[i]);
-										break;
-									case NpgsqlDbType.Interval:
-										writer.Write((TimeSpan)properties[i].GetValue(t), types[i]);
-										break;
-									case NpgsqlDbType.Numeric:
-									case NpgsqlDbType.Money:
-										writer.Write((decimal)properties[i].GetValue(t), types[i]);
-										break;
-									case NpgsqlDbType.Real:
-										writer.Write((Single)properties[i].GetValue(t), types[i]);
-										break;
-									case NpgsqlDbType.Smallint:
-
-										try
-										{
-											if (properties[i].GetType() == typeof(byte))
-											{
-												var swap = Convert.ToInt16(properties[i].GetValue(t));
-												writer.Write((short)swap, types[i]);
-												break;
-											}
-											writer.Write((short)properties[i].GetValue(t), types[i]);
-										}
-										catch (Exception ex)
-										{
-											string ms = ex.Message;
-										}
-
-										break;
-									case NpgsqlDbType.Varchar:
-									case NpgsqlDbType.Text:
-										writer.Write((string)properties[i].GetValue(t), types[i]);
-										break;
-									case NpgsqlDbType.Uuid:
-										writer.Write((Guid)properties[i].GetValue(t), types[i]);
-										break;
-									case NpgsqlDbType.Xml:
-										writer.Write((string)properties[i].GetValue(t), types[i]);
-										break;
-								}
-							}
-						}
-					}
-					writer.Complete();
-				}
-			}
-			catch (Exception ex)
-			{
-				throw new Exception("Error executing NpgSqlBulkCopy.WriteToServer().  See inner exception for details", ex);
-			}
-		}
-		*/
 	}
 }

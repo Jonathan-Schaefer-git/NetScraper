@@ -9,33 +9,32 @@ namespace NetScraper
 {
 	internal static class Scraper
 	{
-		private static ScrapingBrowser scrapingbrowser = new ScrapingBrowser();
 		private static HtmlWeb web = new HtmlWeb();
-		public static Document GetSources(Document doc)
-		{
-			scrapingbrowser.Timeout = new TimeSpan(2);
-			scrapingbrowser.AllowAutoRedirect = true;
-			return doc;
-		}
 
 		public static async Task<Document> ScrapFromLinkAsync(string url)
 		{
+			
 			Console.WriteLine("Called Scraper for {0}", url);
 			//Open a new Document
 			var document = new Document();
 			document.Absoluteurl = new Uri(url);
-			//Set Document parameters
+
 			//Get HTMLDocument and time it
 			var stopwatch = Stopwatch.StartNew();
-			document.HTML = await GetDocument(document);
+			document.HTML = GetDocument(document);
 			stopwatch.Stop();
-			
+
+
 			//Check if Website responded
 			if (document.HTML != null)
 			{
+				
 				document.DateTime = DateTime.UtcNow;
+
 				//Webpage responded set appropriate Status
 				document.Status = true;
+
+
 				//Set Response time of Website
 				document.ResponseTime = stopwatch.ElapsedMilliseconds;
 
@@ -103,7 +102,34 @@ namespace NetScraper
 			}
 		}
 
-		public static async Task<HtmlDocument>? GetDocument(Document document)
+		public static HtmlDocument GetDocument(Document document)
+		{
+			web.PreRequest = delegate (HttpWebRequest webRequest)
+			{
+				webRequest.Timeout = 1000;
+				webRequest.AllowAutoRedirect = false;
+				return true;
+			};
+			try
+			{
+				var doc = web.Load(document.Absoluteurl.ToString());
+				if(doc is null)
+				{
+
+				}
+				else
+				{
+					return doc;
+				}
+			}
+			catch (Exception)
+			{
+				return null;
+			}
+			return null;
+		}
+
+		public static async Task<HtmlDocument>? GetDocumentAsync(Document document)
 		{
 			web.PreRequest = delegate (HttpWebRequest webRequest)
 			{
@@ -114,15 +140,14 @@ namespace NetScraper
 
 			try
 			{
-				var doc = web.LoadFromWebAsync(document.Absoluteurl.ToString());
-				var x = await doc;
-				if (x is null)
+				var doc = await web.LoadFromWebAsync(document.Absoluteurl.ToString());
+				if (doc is null)
 				{
 					//Console.WriteLine("No valid HTML Doc");
 				}
 				else
 				{
-					return x;
+					return doc;
 				}
 			}
 			catch (Exception)

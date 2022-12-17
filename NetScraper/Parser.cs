@@ -1,4 +1,5 @@
 ﻿using HtmlAgilityPack;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Web;
 
@@ -62,28 +63,36 @@ namespace NetScraper
 
 		public static List<string>? RetrieveCSSLinks(Document doc)
 		{
+			
 			var linklist = new List<string>();
 
 			try
 			{
 				if (doc.HTML is not null && doc.Absoluteurl is not null)
 				{
-					var htmlstring = doc.HTML.DocumentNode.OuterHtml;
-					var values = htmlstring.Split("\"");
-					var cssFiles = values.Where(value => value.Contains(".css"));
-					//Console.WriteLine("Looking for JS and CSS");
-					foreach (var cssfile in cssFiles)
+					try
 					{
-						if (!CheckLinkValidity(cssfile))
+						var htmlstring = doc.HTML.DocumentNode.OuterHtml;
+						var values = htmlstring.Split("\"");
+						var cssFiles = values.Where(value => value.Contains(".css"));
+						//Console.WriteLine("Looking for JS and CSS");
+						foreach (var cssfile in cssFiles)
 						{
-							linklist.Add(GetAbsoluteUrlString(doc.Absoluteurl.ToString(), cssfile));
+							if (!CheckLinkValidity(cssfile))
+							{
+								linklist.Add(GetAbsoluteUrlString(doc.Absoluteurl.ToString(), cssfile));
+							}
+							else
+							{
+								linklist.Add(cssfile);
+							}
 						}
-						else
-						{
-							linklist.Add(cssfile);
-						}
+						return linklist;
 					}
-					return linklist;
+					catch (Exception)
+					{
+						string? htmlstring = null;
+					}
 				}
 				return null;
 			}
@@ -115,6 +124,7 @@ namespace NetScraper
 							linklist.Add(jsfile);
 						}
 					}
+					
 					return linklist;
 				}
 				return null;
@@ -160,6 +170,7 @@ namespace NetScraper
 
 		public static List<string>? FindPrioritisedLinks(Document doc)
 		{
+			
 			List<string>? prioritisedlinks = new List<string>();
 			if (doc.Links != null)
 			{
@@ -171,6 +182,7 @@ namespace NetScraper
 						prioritisedlinks.Add(link);
 					}
 				}
+				
 				return prioritisedlinks;
 			}
 			return null;
@@ -178,8 +190,9 @@ namespace NetScraper
 
 		public static List<string>? ParseLinks(Document document)
 		{
-			if (document.HTML != null && document.Absoluteurl != null)
+			if (document.HTML is not null && document.Absoluteurl is not null)
 			{
+				
 				var w = new List<string>();
 				var doc = document.HTML;
 				HtmlNodeCollection nodes = doc.DocumentNode.SelectNodes("//a[@href]");
@@ -197,6 +210,7 @@ namespace NetScraper
 							}
 						}
 					}
+				
 					return w;
 				}
 			}
@@ -205,14 +219,16 @@ namespace NetScraper
 
 		public static List<string>? GetEmailOutOfString(Document document)
 		{
+			
 			List<string>? result = new List<string>();
+
 			if (document.ContentString != null)
 			{
-				//Console.WriteLine("Content String wasn't null");
 				Regex regex = new Regex(@"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}\b", RegexOptions.IgnoreCase);
 				MatchCollection matches = regex.Matches(document.ContentString);
 				if (matches.Count == 0)
 				{
+					
 					return null;
 				}
 				foreach (Match match in matches)
@@ -226,6 +242,7 @@ namespace NetScraper
 					}
 				}
 				List<string>? email = result.Distinct().ToList();
+				
 				return email;
 			}
 			//Console.WriteLine("Content String was null");
@@ -270,12 +287,14 @@ namespace NetScraper
 
 		public static string? ConvertDocToString(Document doc)
 		{
+			
 			if (doc.HTML is null || doc.HTML.DocumentNode is null)
 			{
 				return null;
 			}
 			if (doc.HTML.DocumentNode.OuterHtml is not null)
 			{
+				
 				return Regex.Replace((RemoveInsignificantHtmlWhiteSpace(doc.HTML.DocumentNode.OuterHtml) ?? "").Replace("'", @"\'").Trim(), @"[\r\n]+", " ");
 			}
 			else
