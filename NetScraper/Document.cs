@@ -7,7 +7,7 @@ namespace NetScraper
 	{
 		public bool Status { get; set; }
 		public double ResponseTime { get; set; }
-		public List<string>? Emails { get; set; } = null;
+		public List<string>? Emails { get; set; }
 		public List<ImageData>? ImageData { get; set; }
 		//ER = External Resource
 		public List<string>? CSSLinks { get; set; }

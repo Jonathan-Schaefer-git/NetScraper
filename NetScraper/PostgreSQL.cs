@@ -162,28 +162,40 @@ namespace NetScraper
 			var x = rdr.GetInt64(0);
 			
 			await con.CloseAsync();
-			await con.DisposeAsync();
+			con.Dispose();
 			return x;
 		}
 		public static async Task<bool> PushDocumentListAsync(List<Document> documents)
 		{
+			Console.WriteLine("Called PushDocuments");
+			var counter = 0;
 			var con = EstablishDBConnection();
-			await con.OpenAsync();
+			con.Open();
 			var sql = @"INSERT INTO maindata(status, url, datetime, emails, csscount, jscount, approximatesize, links, contentstring, imagedescriptions, imagelinks, imagerelativeposition) VALUES(@status, @url, @datetime, @emails, @csscount, @jscount, @approximatesize, @links, @contentstring, @imagedescriptions ,@imagelinks, @imagerelativeposition)";
 
-			var cmd = new NpgsqlCommand(sql, con);
+			
+			Console.WriteLine("Documents Count: " + documents.Count());
+
+
 			foreach (var doc in documents)
 			{
+				var cmd = new NpgsqlCommand(sql, con);
 				var imagealts = new List<string>();
 				var imagelinks = new List<string>();
 				var imagepositions = new List<string>();
-				if (doc.ContentString == null || doc.ImageData == null)
+
+				if (doc.ContentString is null)
 				{
+					//Console.WriteLine("Document String is null");
 					return false;
+				}
+				if(doc.ImageData is null)
+				{
+					doc.ImageData = new List<ImageData>();
 				}
 				foreach (var item in doc.ImageData)
 				{
-					if (item.Alt != null)
+					if (item.Alt is not null)
 					{
 						imagealts.Add(item.Alt);
 					}
@@ -191,7 +203,7 @@ namespace NetScraper
 					{
 						imagealts.Add("");
 					}
-					if (item.Link != null)
+					if (item.Link is not null)
 					{
 						imagelinks.Add(item.Link);
 					}
@@ -199,7 +211,7 @@ namespace NetScraper
 					{
 						imagelinks.Add("");
 					}
-					if (item.Relativelocation != null)
+					if (item.Relativelocation is not null)
 					{
 						imagepositions.Add(item.Relativelocation);
 					}
@@ -208,10 +220,9 @@ namespace NetScraper
 						imagepositions.Add("");
 					}
 				}
-				cmd.Parameters.Clear();
 				cmd.Parameters.AddWithValue(@"status", doc.Status);
 				//This Null Reference check is useless but was added as a safety precussion
-				if (doc.Absoluteurl != null)
+				if (doc.Absoluteurl is not null)
 				{
 					cmd.Parameters.AddWithValue(@"url", doc.Absoluteurl.ToString());
 				}
@@ -221,9 +232,9 @@ namespace NetScraper
 					throw new Exception("Website was added without Value");
 				}
 				cmd.Parameters.AddWithValue(@"datetime", doc.DateTime.ToString());
-				if (doc.Emails == null)
+				if (doc.Emails is null)
 				{
-					cmd.Parameters.AddWithValue(@"emails", "");
+					cmd.Parameters.AddWithValue(@"emails", new List<string>());
 				}
 				else
 				{
@@ -233,7 +244,7 @@ namespace NetScraper
 				cmd.Parameters.AddWithValue(@"jscount", doc.JSCount);
 				cmd.Parameters.AddWithValue(@"approximatesize", doc.ApproxByteSize);
 
-				if (doc.Links != null)
+				if (doc.Links is not null)
 				{
 					cmd.Parameters.AddWithValue(@"links", doc.Links);
 				}
@@ -246,13 +257,20 @@ namespace NetScraper
 				cmd.Parameters.AddWithValue(@"imagelinks", imagelinks);
 				cmd.Parameters.AddWithValue(@"imagerelativeposition", imagepositions);
 				await cmd.PrepareAsync();
-				var state = await cmd.ExecuteNonQueryAsync();
-				await con.CloseAsync();
-				await con.DisposeAsync();
-
+				counter += await cmd.ExecuteNonQueryAsync();
+				
+			}
+			con.Close();
+			Console.WriteLine("Rows inserted into Maindata: " + counter);
+			if(counter is -1)
+			{
+				return false;
+			}
+			else
+			{
 				return true;
 			}
-			return false;
+
 		}
 		public static async Task<bool> PushDocumentAsync(Document doc)
 		{

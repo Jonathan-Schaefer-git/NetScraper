@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using MongoDB.Driver.Linq;
+using System.Threading.Tasks;
 
 
 namespace NetScraper
@@ -52,15 +53,16 @@ namespace NetScraper
 			List<string> list = new List<string>();
 			list.Add("https://www.wikipedia.org/");
 			list.Add("https://de.wikipedia.org/");
+			list.Add("https://got.wikipedia.org/");
 			var pushstate = await PostgreSQL.PushOutstandingAsync(list);
 			Console.WriteLine("State of start link push: " + pushstate);
 			StartedScraping = DateTime.Now;
 			await LogWriter.WriteSettingsJsonAsync();
 
-			RunScraper();
+			await RunScraper();
 		}
 
-		private static async void RunScraper()
+		private static async Task RunScraper()
 		{
 			//Called RunScraper
 			Console.WriteLine("Called Scraping Method");
@@ -70,11 +72,9 @@ namespace NetScraper
 			List<string> outstanding = new List<string>();
 			while (Shouldrun)
 			{
-
 				Console.WriteLine("Started Cycle");
 
 				//Get Links to be scraped from DB up to a maximum of 20k strings per batch
-				
 				outstanding.AddRange(await PostgreSQL.GetPrioritisedAsync());
 				outstanding.AddRange(await PostgreSQL.GetOutstandingAsync(BatchLimit - outstanding.Count()));
 				Console.WriteLine("Outstanding Count: " + outstanding.Count());
@@ -85,6 +85,58 @@ namespace NetScraper
 				SimultaneousPool = setting.SimultaneousPool;
 				Console.WriteLine("Concurreny Pool is: " + SimultaneousPool);
 				
+				if (outstanding != null)
+				{
+					var partionedLists = outstanding.Partition(SimultaneousPool);
+					Console.WriteLine("Partitioned Lists: " + partionedLists.Count());
+					foreach (var list in partionedLists)
+					{
+						var documents = await Scraping(list);
+
+						foreach (var document in documents)
+						{
+							if (document.Links is not null)
+							{
+								outstandingLinks.AddRange(document.Links);
+							}
+							if (document.PrioritisedLinks is not null)
+							{
+								prioritisedLinks.AddRange(document.PrioritisedLinks);
+							}
+						}
+
+						var documentstate = await PostgreSQL.PushDocumentListAsync(documents);
+						Console.WriteLine("The Documents were pushed: " + documentstate);
+					}
+
+					foreach (var link in outstanding)
+					{
+						outstandingLinks.Remove(link);
+						prioritisedLinks.Remove(link);
+					}
+
+					List<string> outstandingLinksnd = new HashSet<string>(outstandingLinks).ToList();
+					List<string> prioritisedLinksnd = new HashSet<string>(prioritisedLinks).ToList();
+
+					var pushtask = TriggerPushLinksAsync(outstandingLinksnd, prioritisedLinksnd);
+					var getscrapecount = PostgreSQL.GetScrapingCount();
+					Console.WriteLine("Found {0} Links", outstandingLinksnd.Count);
+					Console.WriteLine("#Prioritised Links {0}", prioritisedLinksnd.Count);
+
+					var state = await pushtask;
+					Scrapes = await getscrapecount;
+					Batch++;
+					await LogWriter.WriteSettingsJsonAsync();
+					
+				}
+				else
+				{
+					Console.WriteLine("No links to Scrap");
+				}
+				
+			}
+		}
+		/*
 				var docs = new List<Document>();
 				foreach (var link in outstanding)
 				{
@@ -101,64 +153,13 @@ namespace NetScraper
 					Console.WriteLine("Checkpoint B");
 				}
 				Console.WriteLine("Worked");
-				
-				/*
-				if (outstanding != null)
-				{
-					var partionedLists = outstanding.Partition(SimultaneousPool);
-					Console.WriteLine("Partitioned Lists: " + partionedLists.Count());	
-					foreach (var list in partionedLists)
-					{
-						var scrapingTask = await Scraping(list);
-
-						foreach (var document in scrapingTask)
-						{
-							if (document.Links != null)
-							{
-								outstandingLinks.AddRange(document.Links);
-							}
-							if (document.PrioritisedLinks != null)
-							{
-								prioritisedLinks.AddRange(document.PrioritisedLinks);
-							}
-						}
-						await PostgreSQL.PushDocumentListAsync(scrapingTask);
-					}
-					foreach (var link in outstanding)
-					{
-						outstandingLinks.Remove(link);
-						prioritisedLinks.Remove(link);
-					}
-
-					List<string> outstandingLinksnd = new HashSet<string>(outstandingLinks).ToList();
-					List<string> prioritisedLinksnd = new HashSet<string>(prioritisedLinks).ToList();
-
-					var pushtask = TriggerPushLinksAsync(outstandingLinksnd, prioritisedLinksnd);
-					var getscrapecount = PostgreSQL.GetScrapingCount();
-					Console.WriteLine("Found {0} Links", outstandingLinksnd.Count);
-					Console.WriteLine("#Prioritised Links {0}", prioritisedLinksnd.Count);
-					await Task.WhenAll(pushtask, getscrapecount);
-					var state = pushtask.Result;
-					Scrapes = getscrapecount.Result;
-					Batch++;
-					await LogWriter.WriteSettingsJsonAsync();
-					
-				}
-				else
-				{
-					Console.WriteLine("No links to Scrap");
-				}
 				*/
-			}
-		}
-		
 		private static async Task<List<Document>> Scraping(IEnumerable<string> links)
 		{
 			var tasks = links.Select(x => Task.Run(() => Scraper.ScrapFromLinkAsync(x))).ToArray();
-			Console.WriteLine("Checkpoint A");
 			await Task.WhenAll(tasks);
-			Console.WriteLine("Checkpoint B");
 			var documents = new List<Document>();
+			
 			foreach (var item in tasks)
 			{
 				documents.Add(item.Result);
@@ -168,7 +169,7 @@ namespace NetScraper
 
 		private static async Task<bool> TriggerPushLinksAsync(List<string> outstandingLinks, List<string> prioritisedLinks)
 		{
-			Task<bool>[] tasks = new Task<bool>[1];
+			Task<bool>[] tasks = new Task<bool>[2];
 			tasks[0] = PostgreSQL.PushOutstandingAsync(outstandingLinks);
 			tasks[1] = PostgreSQL.PushPrioritisedAsync(prioritisedLinks);
 			await Task.WhenAll(tasks);

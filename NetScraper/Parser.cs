@@ -64,52 +64,65 @@ namespace NetScraper
 		{
 			var linklist = new List<string>();
 
-			if (doc.HTML != null && doc.Absoluteurl != null)
+			try
 			{
-				var htmlstring = doc.HTML.DocumentNode.OuterHtml;
-				var values = htmlstring.Split("\"");
-				var cssFiles = values.Where(value => value.Contains(".css"));
-				//Console.WriteLine("Looking for JS and CSS");
-				foreach (var cssfile in cssFiles)
+				if (doc.HTML is not null && doc.Absoluteurl is not null)
 				{
-					if (!CheckLinkValidity(cssfile))
+					var htmlstring = doc.HTML.DocumentNode.OuterHtml;
+					var values = htmlstring.Split("\"");
+					var cssFiles = values.Where(value => value.Contains(".css"));
+					//Console.WriteLine("Looking for JS and CSS");
+					foreach (var cssfile in cssFiles)
 					{
-						linklist.Add(GetAbsoluteUrlString(doc.Absoluteurl.ToString(), cssfile));
+						if (!CheckLinkValidity(cssfile))
+						{
+							linklist.Add(GetAbsoluteUrlString(doc.Absoluteurl.ToString(), cssfile));
+						}
+						else
+						{
+							linklist.Add(cssfile);
+						}
 					}
-					else
-					{
-						linklist.Add(cssfile);
-					}
+					return linklist;
 				}
-				return linklist;
+				return null;
 			}
-			return null;
+			catch (Exception)
+			{
+				return null;
+			}
 		}
 
 		public static List<string>? RetrieveJSLinks(Document doc)
 		{
 			var linklist = new List<string>();
-
-			if (doc.HTML != null && doc.Absoluteurl != null)
+			try
 			{
-				var htmlstring = doc.HTML.DocumentNode.OuterHtml;
-				var values = htmlstring.Split("\"");
-				var jsFiles = values.Where(value => value.Contains(".js"));
-				//Console.WriteLine("Looking for JS and CSS");
-				foreach (var jsfile in jsFiles)
+				if (doc.HTML is not null && doc.Absoluteurl is not null && doc.HTML.DocumentNode.OuterHtml is not null)
 				{
-					if (!CheckLinkValidity(jsfile))
+					var htmlstring = doc.HTML.DocumentNode.OuterHtml;
+					var values = htmlstring.Split("\"");
+					var jsFiles = values.Where(value => value.Contains(".js"));
+					//Console.WriteLine("Looking for JS and CSS");
+					foreach (var jsfile in jsFiles)
 					{
-						linklist.Add(GetAbsoluteUrlString(doc.Absoluteurl.ToString(), jsfile));
+						if (!CheckLinkValidity(jsfile))
+						{
+							linklist.Add(GetAbsoluteUrlString(doc.Absoluteurl.ToString(), jsfile));
+						}
+						else
+						{
+							linklist.Add(jsfile);
+						}
 					}
-					else
-					{
-						linklist.Add(jsfile);
-					}
+					return linklist;
 				}
-				return linklist;
+				return null;
 			}
-			return null;
+			catch (Exception)
+			{
+				return null;
+			}
 		}
 
 		private static string? GetAbsoluteUrlString(string baseUrl, string url)
@@ -176,9 +189,12 @@ namespace NetScraper
 					{
 						string href = n.Attributes["href"].Value;
 						var x = GetAbsoluteUrlString(document.Absoluteurl.ToString(), href);
-						if (!x.EndsWith(".png") || !x.EndsWith(".gif") || !x.EndsWith(".svg") || !x.EndsWith(".jpg") || !x.EndsWith(".webp") || !x.EndsWith(".pdf"))
+						if(x is not null or "")
 						{
-							w.Add(x);
+							if (!x.EndsWith(".png") || !x.EndsWith(".gif") || !x.EndsWith(".svg") || !x.EndsWith(".jpg") || !x.EndsWith(".webp") || !x.EndsWith(".pdf"))
+							{
+								w.Add(x);
+							}
 						}
 					}
 					return w;
@@ -189,7 +205,6 @@ namespace NetScraper
 
 		public static List<string>? GetEmailOutOfString(Document document)
 		{
-			//Console.WriteLine("Called GetEmail");
 			List<string>? result = new List<string>();
 			if (document.ContentString != null)
 			{
@@ -198,7 +213,7 @@ namespace NetScraper
 				MatchCollection matches = regex.Matches(document.ContentString);
 				if (matches.Count == 0)
 				{
-					Console.WriteLine("No E-Mails Found");
+					return null;
 				}
 				foreach (Match match in matches)
 				{
@@ -213,7 +228,7 @@ namespace NetScraper
 				List<string>? email = result.Distinct().ToList();
 				return email;
 			}
-			Console.WriteLine("Content String was null");
+			//Console.WriteLine("Content String was null");
 			return null;
 		}
 
@@ -255,28 +270,23 @@ namespace NetScraper
 
 		public static string? ConvertDocToString(Document doc)
 		{
-			if (doc.HTML == null)
+			if (doc.HTML is null || doc.HTML.DocumentNode is null)
 			{
 				return null;
 			}
+			if (doc.HTML.DocumentNode.OuterHtml is not null)
+			{
+				return Regex.Replace((RemoveInsignificantHtmlWhiteSpace(doc.HTML.DocumentNode.OuterHtml) ?? "").Replace("'", @"\'").Trim(), @"[\r\n]+", " ");
+			}
 			else
 			{
-				var htmldoc = doc.HTML;
-				
-				if (htmldoc.DocumentNode.OuterHtml != null)
-				{
-					return Regex.Replace((RemoveInsignificantHtmlWhiteSpace(htmldoc.DocumentNode.OuterHtml) ?? "").Replace("'", @"\'").Trim(), @"[\r\n]+", " ");
-				}
-				else
-				{
-					return null;
-				}
+				return null;
 			}
 		}
 
 		public static string? ConvertDocToUnfromattedString(Document doc)
 		{
-			if (doc.HTML == null)
+			if (doc.HTML is null)
 			{
 				return null;
 			}

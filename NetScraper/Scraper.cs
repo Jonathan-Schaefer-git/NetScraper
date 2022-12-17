@@ -69,7 +69,7 @@ namespace NetScraper
 				document.ImageData = imagedataTask.Result;
 				
 				//Get JS & CSS Links Count
-				if (document.CSSLinks != null && document.JSLinks != null)
+				if (document.CSSLinks is not null && document.JSLinks is not null)
 				{
 					document.CSSCount = document.CSSLinks.Count();
 					document.JSCount = document.JSLinks.Count();
@@ -82,7 +82,7 @@ namespace NetScraper
 
 				try
 				{
-					if (document.ContentString != null)
+					if (document.ContentString is not null)
 					{
 						string s = document.ContentString;
 						document.ApproxByteSize = ASCIIEncoding.Unicode.GetByteCount(document.ContentString);
@@ -97,7 +97,7 @@ namespace NetScraper
 			else
 			{
 				document.DateTime = DateTime.UtcNow;
-				Console.WriteLine("Website hasn't responded");
+				//Console.WriteLine("Website hasn't responded");
 				document.Status = false;
 				return document;
 			}
@@ -116,9 +116,9 @@ namespace NetScraper
 			{
 				var doc = web.LoadFromWebAsync(document.Absoluteurl.ToString());
 				var x = await doc;
-				if (x == null)
+				if (x is null)
 				{
-					Console.WriteLine("No valid HTML Doc");
+					//Console.WriteLine("No valid HTML Doc");
 				}
 				else
 				{
@@ -127,8 +127,8 @@ namespace NetScraper
 			}
 			catch (Exception)
 			{
-				Console.WriteLine("No valid website");
-				return new HtmlDocument();
+				//Console.WriteLine("No valid website for {0}", document.Absoluteurl);
+				return null;
 			}
 			return null;
 		}
