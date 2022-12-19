@@ -1,6 +1,4 @@
-﻿using MongoDB.Driver;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json;
 
 namespace NetScraper
 {
@@ -27,7 +25,7 @@ namespace NetScraper
 			{
 				return false;
 			}
-			
+
 		}
 		public static async Task<List<string>> ReadLinkBuffer()
 		{

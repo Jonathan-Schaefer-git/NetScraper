@@ -1,7 +1,5 @@
 ﻿using HtmlAgilityPack;
-using ScrapySharp.Network;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text;
 
@@ -11,24 +9,29 @@ namespace NetScraper
 	{
 		private static HtmlWeb web = new HtmlWeb();
 
-		public static async Task<Document> ScrapFromLinkAsync(string url)
+		public static async Task<Document> ScrapFromLinkAsync(string url, bool verbose = false)
 		{
-			
-			Console.WriteLine("Called Scraper for {0}", url);
+			if (verbose)
+			{
+				Console.WriteLine("Called Scraper for {0}", url);
+			}
+
 			//Open a new Document
 			var document = new Document();
 			document.Absoluteurl = new Uri(url);
 
 			//Get HTMLDocument and time it
 			var stopwatch = Stopwatch.StartNew();
-			document.HTML = GetDocument(document);
+			document.HTML = await GetDocumentAsync(document);
 			stopwatch.Stop();
 
+			if (verbose)
+				Console.WriteLine("Getting {0} took {1}ms", document.Absoluteurl, stopwatch.ElapsedMilliseconds);
 
 			//Check if Website responded
-			if (document.HTML != null)
+			if (document.HTML is not null)
 			{
-				
+
 				document.DateTime = DateTime.UtcNow;
 
 				//Webpage responded set appropriate Status
@@ -43,7 +46,7 @@ namespace NetScraper
 				var csslinksTask = Task.Run(() => Parser.RetrieveCSSLinks(document));
 				var linklistTask = Task.Run(() => Parser.ParseLinks(document));
 				var linklist = await linklistTask;
-				if(linklist != null)
+				if (linklist != null)
 				{
 					linklist.RemoveAll(x => String.IsNullOrEmpty(x));
 				}
@@ -52,21 +55,21 @@ namespace NetScraper
 				//Tasks that are dependent on the result of Linkslist
 				var prioritisedlinksTask = Task.Run(() => Parser.FindPrioritisedLinks(document));
 				var imagedataTask = Task.Run(() => Parser.RetrieveImageData(document));
-				
+
 				//emailTask is reliant on the Contentstring
 				document.ContentString = await contentstringTask;
 				var emailTask = Task.Run(() => Parser.GetEmailOutOfString(document));
 
 				//Wait for all Tasks to finish execution
 				await Task.WhenAll(jslinksTask, csslinksTask, emailTask, prioritisedlinksTask, imagedataTask);
-				
+
 				//Set properties
 				document.PrioritisedLinks = prioritisedlinksTask.Result;
 				document.CSSLinks = csslinksTask.Result;
-				document.Emails= emailTask.Result;
-				document.JSLinks= jslinksTask.Result;
+				document.Emails = emailTask.Result;
+				document.JSLinks = jslinksTask.Result;
 				document.ImageData = imagedataTask.Result;
-				
+
 				//Get JS & CSS Links Count
 				if (document.CSSLinks is not null && document.JSLinks is not null)
 				{
@@ -107,15 +110,16 @@ namespace NetScraper
 			web.PreRequest = delegate (HttpWebRequest webRequest)
 			{
 				webRequest.Timeout = 1000;
-				webRequest.AllowAutoRedirect = false;
+				webRequest.AllowAutoRedirect = true;
+				webRequest.MaximumAutomaticRedirections = 3;
 				return true;
 			};
 			try
 			{
 				var doc = web.Load(document.Absoluteurl.ToString());
-				if(doc is null)
+				if (doc is null)
 				{
-
+					return null;
 				}
 				else
 				{
@@ -126,7 +130,19 @@ namespace NetScraper
 			{
 				return null;
 			}
-			return null;
+		}
+
+		public static async Task<HtmlDocument>? GetDocumentNoEC()
+		{
+			web.PreRequest = delegate (HttpWebRequest webRequest)
+			{
+				webRequest.Timeout = 1000;
+				webRequest.AllowAutoRedirect = true;
+				webRequest.MaximumAutomaticRedirections = 3;
+				return true;
+			};
+
+			return new HtmlDocument();
 		}
 
 		public static async Task<HtmlDocument>? GetDocumentAsync(Document document)
@@ -134,7 +150,8 @@ namespace NetScraper
 			web.PreRequest = delegate (HttpWebRequest webRequest)
 			{
 				webRequest.Timeout = 1000;
-				webRequest.AllowAutoRedirect= false;
+				webRequest.AllowAutoRedirect = false;
+				webRequest.MaximumAutomaticRedirections = 4;
 				return true;
 			};
 

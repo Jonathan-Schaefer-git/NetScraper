@@ -1,5 +1,4 @@
 ﻿using HtmlAgilityPack;
-using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Web;
 
@@ -63,36 +62,30 @@ namespace NetScraper
 
 		public static List<string>? RetrieveCSSLinks(Document doc)
 		{
-			
+
 			var linklist = new List<string>();
 
 			try
 			{
-				if (doc.HTML is not null && doc.Absoluteurl is not null)
+				if (doc.HTML is not null && doc.Absoluteurl is not null && doc.HTML.DocumentNode.OuterHtml is not null)
 				{
-					try
+					var htmlstring = doc.HTML.DocumentNode.OuterHtml;
+					var values = htmlstring.Split("\"");
+					var jsFiles = values.Where(value => value.Contains(".css"));
+
+					foreach (var jsfile in jsFiles)
 					{
-						var htmlstring = doc.HTML.DocumentNode.OuterHtml;
-						var values = htmlstring.Split("\"");
-						var cssFiles = values.Where(value => value.Contains(".css"));
-						//Console.WriteLine("Looking for JS and CSS");
-						foreach (var cssfile in cssFiles)
+						if (!CheckLinkValidity(jsfile))
 						{
-							if (!CheckLinkValidity(cssfile))
-							{
-								linklist.Add(GetAbsoluteUrlString(doc.Absoluteurl.ToString(), cssfile));
-							}
-							else
-							{
-								linklist.Add(cssfile);
-							}
+							linklist.Add(GetAbsoluteUrlString(doc.Absoluteurl.ToString(), jsfile));
 						}
-						return linklist;
+						else
+						{
+							linklist.Add(jsfile);
+						}
 					}
-					catch (Exception)
-					{
-						string? htmlstring = null;
-					}
+
+					return linklist;
 				}
 				return null;
 			}
@@ -124,7 +117,7 @@ namespace NetScraper
 							linklist.Add(jsfile);
 						}
 					}
-					
+
 					return linklist;
 				}
 				return null;
@@ -170,7 +163,7 @@ namespace NetScraper
 
 		public static List<string>? FindPrioritisedLinks(Document doc)
 		{
-			
+
 			List<string>? prioritisedlinks = new List<string>();
 			if (doc.Links != null)
 			{
@@ -182,7 +175,7 @@ namespace NetScraper
 						prioritisedlinks.Add(link);
 					}
 				}
-				
+
 				return prioritisedlinks;
 			}
 			return null;
@@ -192,7 +185,7 @@ namespace NetScraper
 		{
 			if (document.HTML is not null && document.Absoluteurl is not null)
 			{
-				
+
 				var w = new List<string>();
 				var doc = document.HTML;
 				HtmlNodeCollection nodes = doc.DocumentNode.SelectNodes("//a[@href]");
@@ -202,7 +195,7 @@ namespace NetScraper
 					{
 						string href = n.Attributes["href"].Value;
 						var x = GetAbsoluteUrlString(document.Absoluteurl.ToString(), href);
-						if(x is not null or "")
+						if (x is not null or "")
 						{
 							if (!x.EndsWith(".png") || !x.EndsWith(".gif") || !x.EndsWith(".svg") || !x.EndsWith(".jpg") || !x.EndsWith(".webp") || !x.EndsWith(".pdf"))
 							{
@@ -210,7 +203,7 @@ namespace NetScraper
 							}
 						}
 					}
-				
+
 					return w;
 				}
 			}
@@ -219,7 +212,7 @@ namespace NetScraper
 
 		public static List<string>? GetEmailOutOfString(Document document)
 		{
-			
+
 			List<string>? result = new List<string>();
 
 			if (document.ContentString != null)
@@ -228,7 +221,7 @@ namespace NetScraper
 				MatchCollection matches = regex.Matches(document.ContentString);
 				if (matches.Count == 0)
 				{
-					
+
 					return null;
 				}
 				foreach (Match match in matches)
@@ -242,7 +235,7 @@ namespace NetScraper
 					}
 				}
 				List<string>? email = result.Distinct().ToList();
-				
+
 				return email;
 			}
 			//Console.WriteLine("Content String was null");
@@ -287,14 +280,14 @@ namespace NetScraper
 
 		public static string? ConvertDocToString(Document doc)
 		{
-			
+
 			if (doc.HTML is null || doc.HTML.DocumentNode is null)
 			{
 				return null;
 			}
 			if (doc.HTML.DocumentNode.OuterHtml is not null)
 			{
-				
+
 				return Regex.Replace((RemoveInsignificantHtmlWhiteSpace(doc.HTML.DocumentNode.OuterHtml) ?? "").Replace("'", @"\'").Trim(), @"[\r\n]+", " ");
 			}
 			else

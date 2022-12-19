@@ -1,8 +1,5 @@
 ﻿using MongoDB.Driver.Linq;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
-using System.Threading.Tasks;
 
 
 namespace NetScraper
@@ -13,7 +10,7 @@ namespace NetScraper
 		public static int BatchLimit = 10000;
 		public static int Batch = 0;
 		public static long Scrapes = 0;
-		public static int SimultaneousPool = 50;
+		public static int SimultaneousPool = 70;
 		public static bool Shouldrun = true;
 		public static string ConnectionString = "Host=localhost;Username=postgres;Password=1598;Database=Netscraper";
 		public static string filepath = Directory.GetParent(Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName).Parent.FullName;
@@ -23,6 +20,7 @@ namespace NetScraper
 
 		private static async Task Main()
 		{
+			Console.ForegroundColor = ConsoleColor.White;
 			Console.WriteLine(".NETScraper developed by Jona4Dev");
 			Console.WriteLine("Reading Settings from {0}", fileSettings);
 			var settings = await LogWriter.LoadJsonAsync();
@@ -31,8 +29,9 @@ namespace NetScraper
 			Console.WriteLine("=========================================");
 			Console.WriteLine("Type 'help' to get the list of commands");
 			var startlinks = new List<string>();
-			while(true)
+			while (true)
 			{
+				Console.ForegroundColor = ConsoleColor.White;
 				Console.WriteLine("=========================================");
 				Console.WriteLine("Enter a Command: ");
 				Console.Write(">");
@@ -45,9 +44,25 @@ namespace NetScraper
 						break;
 
 					case "help":
-						Console.WriteLine("new - Reset all tables and start scraping from default stack");
+						Console.WriteLine("=========================================");
+						Console.ForegroundColor = ConsoleColor.Cyan;
+						Console.WriteLine("reset - Reset table and start scraping (Need for providing links to default stacks)");
+						Console.WriteLine("load - Load links from file to default stack");
+						Console.WriteLine("writebuffer - Write default stack to file");
+						Console.WriteLine("init - Initialize default stack with standard links");
+						Console.WriteLine("info - Get the rows of Maindata");
+						Console.WriteLine("exit - Exits the application");
 						Console.WriteLine("start - Continue from existing stack");
+						Console.WriteLine("debug - Run debug method");
 						Console.WriteLine("help - Supply this menu");
+						Console.ForegroundColor = ConsoleColor.White;
+						break;
+
+					case "debug":
+						Console.ForegroundColor = ConsoleColor.Blue;
+						Console.WriteLine("Launching Debug");
+						Console.ForegroundColor = ConsoleColor.White;
+						await DebugMethod(startlinks);
 						break;
 
 					case "start":
@@ -61,33 +76,99 @@ namespace NetScraper
 						}
 						break;
 					case "load":
-						Console.WriteLine("Loading Links from file");
 						startlinks = await LogWriter.ReadLinkBuffer();
-						Console.WriteLine("Loaded {0} links", startlinks.Count);
+						if (startlinks is not null)
+						{
+							Console.ForegroundColor = ConsoleColor.Green;
+							Console.WriteLine("[Info]: Loaded {0} links", startlinks.Count);
+						}
+						else
+						{
+							Console.ForegroundColor = ConsoleColor.Red;
+							Console.WriteLine("[Error]: Failed loading links");
+						}
+						Console.ForegroundColor = ConsoleColor.White;
 						break;
 
-					case "setup":
+					case "writebuffer":
 						var writestate = await LogWriter.WriteLinkBuffer(startlinks);
-						Console.WriteLine("Writing to file state: {0}",writestate);
+						if (writestate)
+						{
+							Console.ForegroundColor = ConsoleColor.Green;
+							Console.WriteLine("[Info]: Writing to file was successful");
+						}
+						else
+						{
+							Console.ForegroundColor = ConsoleColor.Red;
+							Console.WriteLine("[Error]: Writing to file failed");
+						}
+						Console.ForegroundColor = ConsoleColor.White;
 						break;
+
 					case "init":
-						Console.WriteLine("Supplying Program with start links");
+						Console.WriteLine("=========================================");
+						Console.ForegroundColor = ConsoleColor.Green;
+						Console.WriteLine("[Info]: Supplying Program with start links");
+						Console.ForegroundColor = ConsoleColor.White;
 						startlinks.Add("https://www.wikipedia.org/");
-						startlinks.Add("https://de.wikipedia.org/");
-						startlinks.Add("https://got.wikipedia.org/");
-						startlinks.Add("https://play.google.com/store/apps/details?id=org.wikipedia&referrer=utm_source%3Dportal%26utm_medium%3Dbutton%26anid%3Dadmob");
+						startlinks.Add("https://de.wikipedia.org");
 						break;
 
 					case "reset":
 						Console.WriteLine("Reseting Database");
-						Task<bool>[] resettasks = new Task<bool>[] { PostgreSQL.ResetOutstandingAsync(), PostgreSQL.ResetMainDataAsync(), PostgreSQL.ResetPrioritisedAsync() };
+						Task<bool>[] resettasks = new Task<bool>[] { PostgreSQL.ResetMainDataAsync() };
 						await Task.WhenAll(resettasks);
-						Console.WriteLine("Reset Tables");
+						if (resettasks[0].Result is true)
+						{
+
+							Console.WriteLine("=========================================");
+							Console.ForegroundColor = ConsoleColor.Green;
+							Console.WriteLine("Resetting Tables was successful");
+							Console.ForegroundColor = ConsoleColor.White;
+						}
+						else
+						{
+							Console.WriteLine("=========================================");
+							Console.ForegroundColor = ConsoleColor.Red;
+							Console.WriteLine("[Error]: Resetting wasn't successful");
+							Console.ForegroundColor = ConsoleColor.White;
+						}
+						break;
+
+					case "info":
+						var s = await PostgreSQL.GetScrapingCount();
+						Console.WriteLine("=========================================");
+						if (s is not -1)
+						{
+							Console.ForegroundColor = ConsoleColor.Cyan;
+							Console.WriteLine("[Info]: There are {0} entries in maindata", s);
+						}
+						else
+						{
+							Console.ForegroundColor = ConsoleColor.Red;
+							Console.WriteLine("[Error]: Maindata has no rows or doesn't exist");
+						}
+						Console.ForegroundColor = ConsoleColor.White;
+						break;
+
+					case "exit":
+						Console.WriteLine("=========================================");
+						Console.WriteLine("Goodbye");
+						Environment.Exit(0);
 						break;
 				}
 			}
 		}
-
+		private static async Task<bool> DebugMethod(List<string> startlinks)
+		{
+			var documents = new List<Document>();
+			foreach (var item in startlinks)
+			{
+				documents.Add(await Scraper.ScrapFromLinkAsync(item, true));
+			}
+			await PostgreSQL.PushDocumentListAsync(documents);
+			return true;
+		}
 		private static async Task<bool> RunScraper(List<string> startlinks)
 		{
 			//Called RunScraper
@@ -99,10 +180,11 @@ namespace NetScraper
 			while (Shouldrun)
 			{
 				Console.WriteLine("Started Cycle");
+				List<Task<bool>> pushtasks = new List<Task<bool>>();
 				//Get Links to be scraped from DB up to a maximum of 20k strings per batch
 				outstanding.AddRange(startlinks);
 				outstanding.AddRange(prioritisedLinks);
-				
+
 				Console.WriteLine("Outstanding Count: " + outstanding.Count());
 
 				//Check settings (Used for web interface)
@@ -111,7 +193,7 @@ namespace NetScraper
 				SimultaneousPool = setting.SimultaneousPool;
 
 				Console.WriteLine("Concurreny Pool is: " + SimultaneousPool);
-				
+
 				if (outstanding != null)
 				{
 					var partionedLists = outstanding.Partition(SimultaneousPool);
@@ -134,8 +216,7 @@ namespace NetScraper
 							}
 						}
 
-						var documentstate = await PostgreSQL.PushDocumentListAsync(documents);
-						Console.WriteLine("The Documents were pushed: " + documentstate);
+						pushtasks.Add(PostgreSQL.PushDocumentListAsync(documents));
 					}
 
 					foreach (var link in outstanding)
@@ -147,7 +228,7 @@ namespace NetScraper
 					List<string> outstandingLinksnd = new HashSet<string>(outstandingLinks).ToList();
 					List<string> prioritisedLinksnd = new HashSet<string>(prioritisedLinks).ToList();
 
-					
+
 					if (prioritisedLinksnd.Count > BatchLimit)
 					{
 						prioritisedLinksnd.RemoveRange(BatchLimit, prioritisedLinksnd.Count - BatchLimit);
@@ -168,7 +249,18 @@ namespace NetScraper
 
 					Scrapes = await getscrapecount;
 					Batch++;
-					await LogWriter.WriteSettingsJsonAsync();
+					var settingstate = await LogWriter.WriteSettingsJsonAsync();
+					await Task.WhenAll(pushtasks);
+
+					if (pushtasks.All(a => a.Result) || pushtasks.All(a => !a.Result))
+					{
+						Console.WriteLine("All documents were pushed successfully");
+					}
+					else
+					{
+						Console.WriteLine("One or more document pushes failed");
+					}
+
 					var writestate = await LogWriter.WriteLinkBuffer(prioritisedLinksnd);
 					if (writestate)
 					{
@@ -186,14 +278,14 @@ namespace NetScraper
 			}
 			return true;
 		}
-		
+
 		private static async Task<List<Document>> Scraping(IEnumerable<string> links)
 		{
 			var tasks = links.Select(x => Task.Run(() => Scraper.ScrapFromLinkAsync(x))).ToArray();
 			await Task.WhenAll(tasks);
 
 			var documents = new List<Document>();
-			
+
 			foreach (var item in tasks)
 			{
 				documents.Add(item.Result);
@@ -201,24 +293,6 @@ namespace NetScraper
 			return documents;
 		}
 
-		private static async Task<bool> TriggerPushLinksAsync(List<string> outstandingLinks, List<string> prioritisedLinks)
-		{
-			Task<bool>[] tasks = new Task<bool>[2];
-			tasks[0] = PostgreSQL.PushOutstandingAsync(outstandingLinks);
-			tasks[1] = PostgreSQL.PushPrioritisedAsync(prioritisedLinks);
-			await Task.WhenAll(tasks);
-			
-			if (tasks[0].Result == true && tasks[1].Result == true)
-			{
-				Console.WriteLine("Links were pushed successfully");
-				return true;
-			}
-			else
-			{
-				Console.WriteLine("[Error]: Links weren't pushed successfully");
-				return false;
-			}
-		}
 
 		public static IEnumerable<List<T>> Partition<T>(this IList<T> source, Int32 size)
 		{
