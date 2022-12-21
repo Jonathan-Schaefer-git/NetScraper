@@ -18,36 +18,29 @@ namespace NetScraper
 		}
 
 		//private static Regex hrefregex = new Regex(@"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s!()[]{};:'".,<>?«»“”‘’]))");
-		private static Regex hrefregex = new Regex(@"href\s*=\s*(?:[""'](?<1>[^""']*)[""']|(?<1>[^>\s]+))", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1));
-
-		//public static string UrlRegex(Document document)
-		//{
-		//		}
+		private static Regex hrefregex = new Regex(@"(http|ftp|https)://([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:/~+#-]*[\w@?^=%&/~+#-])?", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1));
 
 		public static List<ImageData>? RetrieveImageData(Document doc)
 		{
-			var document = doc.HTML;
-
-			if (document != null && doc.Absoluteurl != null)
+			if(doc.HTMLString is not null)
 			{
-				List<ImageData> imageDataList = new List<ImageData>();
-				var x = document.DocumentNode.SelectNodes("//img");
-				if (x != null)
-				{
-					foreach (HtmlNode node in document.DocumentNode.SelectNodes("//img"))
-					{
-						ImageData imagedata = new ImageData();
+				var imagedatalist = new List<ImageData>();
+				string pattern = @"<img src=""(?<src>.+?)"" alt=""(?<description>.+?)"">";
+				Regex regex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
+				MatchCollection matches = regex.Matches(doc.HTMLString);
 
-						string attributealt = node.GetAttributeValue("alt", "");
-						string attributelinks = node.GetAttributeValue("src", "");
-						string relativeposition = node.XPath;
-						imagedata.Alt = attributealt;
-						imagedata.Link = GetAbsoluteUrlString(doc.Absoluteurl.ToString(), attributelinks);
-						imagedata.Relativelocation = relativeposition;
-						imageDataList.Add(imagedata);
+				foreach (Match match in matches)
+				{
+					if (match.Success)
+					{
+						ImageData img = new ImageData();
+						
+						img.Link = GetAbsoluteUrlString(doc.Absoluteurl.ToString() ,match.Groups["src"].Value);
+						img.Alt = match.Groups["description"].Value;
+						imagedatalist.Add(img);
 					}
-					return imageDataList;
 				}
+				return imagedatalist;
 			}
 			return null;
 		}
@@ -62,14 +55,13 @@ namespace NetScraper
 
 		public static List<string>? RetrieveCSSLinks(Document doc)
 		{
-
 			var linklist = new List<string>();
 
 			try
 			{
-				if (doc.HTML is not null && doc.Absoluteurl is not null && doc.HTML.DocumentNode.OuterHtml is not null)
+				if (doc.HTMLString is not null)
 				{
-					var htmlstring = doc.HTML.DocumentNode.OuterHtml;
+					var htmlstring = doc.HTMLString;
 					var values = htmlstring.Split("\"");
 					var jsFiles = values.Where(value => value.Contains(".css"));
 
@@ -100,9 +92,9 @@ namespace NetScraper
 			var linklist = new List<string>();
 			try
 			{
-				if (doc.HTML is not null && doc.Absoluteurl is not null && doc.HTML.DocumentNode.OuterHtml is not null)
+				if (doc.HTMLString is not null)
 				{
-					var htmlstring = doc.HTML.DocumentNode.OuterHtml;
+					var htmlstring = doc.HTMLString;
 					var values = htmlstring.Split("\"");
 					var jsFiles = values.Where(value => value.Contains(".js"));
 					//Console.WriteLine("Looking for JS and CSS");
@@ -133,6 +125,7 @@ namespace NetScraper
 			try
 			{
 				var uri = new Uri(url, UriKind.RelativeOrAbsolute);
+
 				if (!uri.IsAbsoluteUri)
 					uri = new Uri(new Uri(baseUrl), uri);
 				return uri.ToString();
@@ -163,7 +156,6 @@ namespace NetScraper
 
 		public static List<string>? FindPrioritisedLinks(Document doc)
 		{
-
 			List<string>? prioritisedlinks = new List<string>();
 			if (doc.Links != null)
 			{
@@ -183,51 +175,56 @@ namespace NetScraper
 
 		public static List<string>? ParseLinks(Document document)
 		{
-			if (document.HTML is not null && document.Absoluteurl is not null)
+			if (document.Absoluteurl is not null && document.HTMLString is not null)
 			{
-
 				var w = new List<string>();
-				var doc = document.HTML;
-				HtmlNodeCollection nodes = doc.DocumentNode.SelectNodes("//a[@href]");
-				if (nodes != null)
+				var docstring = document.HTMLString;
+
+				var links = Regex.Matches(docstring, @"<a\s+(?:[^>]*?\s+)?href=""([^""]*)""")
+							 .Cast<Match>()
+							 .Select(m => m.Groups[1].Value)
+							 .ToList();
+
+				if (links is not null)
 				{
-					foreach (var n in nodes)
+					foreach (var link in links)
 					{
-						string href = n.Attributes["href"].Value;
-						var x = GetAbsoluteUrlString(document.Absoluteurl.ToString(), href);
-						if (x is not null or "")
+						if(link is not null or "")
 						{
-							if (!x.EndsWith(".png") || !x.EndsWith(".gif") || !x.EndsWith(".svg") || !x.EndsWith(".jpg") || !x.EndsWith(".webp") || !x.EndsWith(".pdf"))
+							if (link.StartsWith("http://") || link.StartsWith("https://"))
 							{
-								w.Add(x);
+								w.Add(link);
+							}
+							else
+							{
+								w.Add(GetAbsoluteUrlString(document.Absoluteurl.ToString(), link));
 							}
 						}
 					}
-
 					return w;
 				}
+				return null;
 			}
 			return null;
 		}
 
 		public static List<string>? GetEmailOutOfString(Document document)
 		{
-
 			List<string>? result = new List<string>();
 
-			if (document.ContentString != null)
+			if (document.HTMLString is not null)
 			{
-				Regex regex = new Regex(@"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}\b", RegexOptions.IgnoreCase);
-				MatchCollection matches = regex.Matches(document.ContentString);
+				Regex regex = new Regex(@"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+				MatchCollection matches = regex.Matches(document.HTMLString);
 				if (matches.Count == 0)
 				{
-
 					return null;
 				}
 				foreach (Match match in matches)
 				{
 					if (match.Value.EndsWith(".png") || match.Value.EndsWith(".gif") || match.Value.EndsWith(".svg") || match.Value.EndsWith(".jpg") || match.Value.EndsWith(".webp") || match.Value.EndsWith(".pdf"))
 					{
+
 					}
 					else
 					{
@@ -238,89 +235,17 @@ namespace NetScraper
 
 				return email;
 			}
-			//Console.WriteLine("Content String was null");
 			return null;
 		}
-
-		/*
-		 * public static bool IsImageUrl(string url)
-		{
-			if (url is not null)
-			{
-				HttpClient httpClient = new HttpClient();
-
-				var req = (HttpWebRequest)WebRequest.Create(url);
-				req.Method = "HEAD";
-				using (var resp = req.GetResponse())
-				{
-					return resp.ContentType.ToLower(CultureInfo.InvariantCulture)
-							   .StartsWith("image/");
-				}
-			}
-			return false;
-		}
-		public static List<string>? ExtractURLs(Document document)
-		{
-			//Console.WriteLine("Called ExtractURLs");
-			if(document.HTML != null)
-			{
-				//Console.WriteLine("HTML wasn't null");
-				var doc = document.HTML;
-				var linkTags = doc.DocumentNode.Descendants("link");
-				var linkedPages = doc.DocumentNode.Descendants("a")
-												  .Select(a => a.GetAttributeValue("href", null))
-												  .Where(u => !String.IsNullOrEmpty(u));
-				List<string> LinkList = linkedPages.ToList();
-				return	LinkList;
-			}
-			Console.WriteLine("HTML was null");
-			return null;
-		}
-		*/
 
 		public static string? ConvertDocToString(Document doc)
 		{
-
-			if (doc.HTML is null || doc.HTML.DocumentNode is null)
+			if (doc.HTMLString is null)
 			{
 				return null;
 			}
-			if (doc.HTML.DocumentNode.OuterHtml is not null)
-			{
-
-				return Regex.Replace((RemoveInsignificantHtmlWhiteSpace(doc.HTML.DocumentNode.OuterHtml) ?? "").Replace("'", @"\'").Trim(), @"[\r\n]+", " ");
-			}
-			else
-			{
-				return null;
-			}
-		}
-
-		public static string? ConvertDocToUnfromattedString(Document doc)
-		{
-			if (doc.HTML is null)
-			{
-				return null;
-			}
-			else
-			{
-				var htmldoc = doc.HTML;
-				return htmldoc.DocumentNode.OuterHtml;
-			}
-		}
-
-		public static IEnumerable<string> ExtractHttpUrls(string aText, string? aMatch = null)
-		{
-			if (String.IsNullOrEmpty(aText))
-				yield break;
-			var matches = cHttpUrlsRegex.Matches(aText);
-			var vMatcher = aMatch == null ? null : new Regex(aMatch);
-			foreach (Match match in matches)
-			{
-				var vUrl = HttpUtility.UrlDecode(match.Groups["url"].Value);
-				if (vMatcher == null || vMatcher.IsMatch(vUrl))
-					yield return vUrl;
-			}
+			return Regex.Replace((RemoveInsignificantHtmlWhiteSpace(doc.HTMLString) ?? "").Replace("'", @"\'").Trim(), @"[\r\n]+", " ");
+			
 		}
 	}
 }

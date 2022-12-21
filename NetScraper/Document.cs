@@ -19,7 +19,6 @@ namespace NetScraper
 		public long ApproxByteSize { get; set; }
 		public IEnumerable<string>? Links { get; set; } = null;
 		public List<string>? PrioritisedLinks { get; set; } = null;
-		public HtmlDocument? HTML { get; set; } = null;
-		public string? ContentString { get; set; } = null;
+		public string? HTMLString { get; set; } = null;
 	}
 }

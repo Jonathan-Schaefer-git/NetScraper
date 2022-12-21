@@ -27,15 +27,27 @@ namespace NetScraper
 			}
 
 		}
-		public static async Task<List<string>> ReadLinkBuffer()
+		public static async Task<List<string>> ReadLinkBuffer(bool benchmark = false)
 		{
 			try
 			{
-				using (StreamReader r = new StreamReader(CoreHandler.fileBuffer))
+				if (!benchmark)
 				{
-					string jsonstring = await r.ReadToEndAsync();
-					List<string> links = JsonConvert.DeserializeObject<List<string>>(jsonstring);
-					return links;
+					using (StreamReader r = new StreamReader(CoreHandler.fileBuffer))
+					{
+						string jsonstring = await r.ReadToEndAsync();
+						List<string> links = JsonConvert.DeserializeObject<List<string>>(jsonstring);
+						return links;
+					}
+				}
+				else
+				{
+					using (StreamReader r = new StreamReader(CoreHandler.fileTestBatch))
+					{
+						string jsonstring = await r.ReadToEndAsync();
+						List<string> links = JsonConvert.DeserializeObject<List<string>>(jsonstring);
+						return links;
+					}
 				}
 			}
 			catch (Exception)
@@ -59,7 +71,7 @@ namespace NetScraper
 					writer.WritePropertyName("SimultaneousPool");
 					writer.WriteValue(CoreHandler.SimultaneousPool);
 					writer.WritePropertyName("ShouldRun");
-					writer.WriteValue(CoreHandler.Shouldrun);
+					writer.WriteValue(CoreHandler.shouldRun);
 					writer.WritePropertyName("ScrapesCompleted");
 					writer.WriteValue(CoreHandler.Scrapes);
 					writer.WritePropertyName("BatchesCompleted");

@@ -27,7 +27,7 @@ namespace NetScraper
 				cmd.CommandText = "DROP TABLE IF EXISTS maindata cascade";
 				var x = await cmd.ExecuteNonQueryAsync();
 
-				cmd.CommandText = @"CREATE TABLE maindata(id SERIAL PRIMARY KEY, status BOOLEAN, url TEXT, datetime TEXT, emails TEXT[], csscount INTEGER, jscount INTEGER, approximatesize INTEGER, links TEXT[], contentstring TEXT, imagedescriptions TEXT[], imagelinks TEXT[], imagerelativeposition TEXT[])";
+				cmd.CommandText = @"CREATE TABLE maindata(id SERIAL PRIMARY KEY, status BOOLEAN, url TEXT, datetime TEXT, emails TEXT[], csscount INTEGER, jscount INTEGER, approximatesize INTEGER, links TEXT[], contentstring TEXT, imagedescriptions TEXT[], imagelinks TEXT[])";
 				Console.WriteLine("Resetted maindata");
 				await cmd.ExecuteNonQueryAsync();
 				con.Close();
@@ -49,7 +49,7 @@ namespace NetScraper
 			using (var con = EstablishDBConnection())
 			{
 				con.Open();
-				var sql = @"INSERT INTO maindata(status, url, datetime, emails, csscount, jscount, approximatesize, links, contentstring, imagedescriptions, imagelinks, imagerelativeposition) VALUES(@status, @url, @datetime, @emails, @csscount, @jscount, @approximatesize, @links, @contentstring, @imagedescriptions ,@imagelinks, @imagerelativeposition)";
+				var sql = @"INSERT INTO maindata(status, url, datetime, emails, csscount, jscount, approximatesize, links, contentstring, imagedescriptions, imagelinks) VALUES(@status, @url, @datetime, @emails, @csscount, @jscount, @approximatesize, @links, @contentstring, @imagedescriptions ,@imagelinks)";
 
 
 				Console.WriteLine("Documents Count: " + documents.Count());
@@ -62,7 +62,7 @@ namespace NetScraper
 					var imagelinks = new List<string>();
 					var imagepositions = new List<string>();
 
-					if (doc.ContentString is null)
+					if (doc.HTMLString is null)
 					{
 						cmd.Parameters.AddWithValue(@"contentstring", "");
 					}
@@ -87,14 +87,6 @@ namespace NetScraper
 						else
 						{
 							imagelinks.Add("");
-						}
-						if (item.Relativelocation is not null)
-						{
-							imagepositions.Add(item.Relativelocation);
-						}
-						else
-						{
-							imagepositions.Add("");
 						}
 					}
 					cmd.Parameters.AddWithValue(@"status", doc.Status);
@@ -129,9 +121,9 @@ namespace NetScraper
 					{
 						cmd.Parameters.AddWithValue(@"links", new List<string>());
 					}
-					if (doc.ContentString is not null)
+					if (doc.HTMLString is not null)
 					{
-						cmd.Parameters.AddWithValue(@"contentstring", doc.ContentString);
+						cmd.Parameters.AddWithValue(@"contentstring",Parser.RemoveInsignificantHtmlWhiteSpace(doc.HTMLString));
 					}
 
 					cmd.Parameters.AddWithValue(@"imagedescriptions", imagealts);
@@ -199,8 +191,8 @@ namespace NetScraper
 		}
 
 
-		//These methods are deprecated
-
+		//! These methods are deprecated. Do not use
+		/*
 		public static async Task<bool> ResetOutstandingAsync()
 		{
 			using var con = EstablishDBConnection();
@@ -335,96 +327,7 @@ namespace NetScraper
 
 
 
-		public static async Task<bool> PushDocumentAsync(Document doc)
-		{
-			using var con = EstablishDBConnection();
-			await con.OpenAsync();
-			var sql = @"INSERT INTO maindata(status, url, datetime, emails, csscount, jscount, approximatesize, links, contentstring, imagedescriptions, imagelinks, imagerelativeposition) VALUES(@status, @url, @datetime, @emails, @csscount, @jscount, @approximatesize, @links, @contentstring, @imagedescriptions ,@imagelinks, @imagerelativeposition)";
-
-			var cmd = new NpgsqlCommand(sql, con);
-			var imagealts = new List<string>();
-			var imagelinks = new List<string>();
-			var imagepositions = new List<string>();
-			if (doc.ContentString == null || doc.ImageData == null)
-			{
-				return false;
-			}
-			foreach (var item in doc.ImageData)
-			{
-				if (item.Alt != null)
-				{
-					imagealts.Add(item.Alt);
-				}
-				else
-				{
-					imagealts.Add("");
-				}
-				if (item.Link != null)
-				{
-					imagelinks.Add(item.Link);
-				}
-				else
-				{
-					imagelinks.Add("");
-				}
-				if (item.Relativelocation != null)
-				{
-					imagepositions.Add(item.Relativelocation);
-				}
-				else
-				{
-					imagepositions.Add("");
-				}
-			}
-			cmd.Parameters.AddWithValue(@"status", doc.Status);
-			//This Null Reference check is useless but was added as a safety precussion
-			if (doc.Absoluteurl != null)
-			{
-				cmd.Parameters.AddWithValue(@"url", doc.Absoluteurl.ToString());
-			}
-			else
-			{
-				cmd.Parameters.AddWithValue(@"url", "");
-				throw new Exception("Website was added without Value");
-			}
-			cmd.Parameters.AddWithValue(@"datetime", doc.DateTime.ToString());
-			if (doc.Emails == null)
-			{
-				cmd.Parameters.AddWithValue(@"emails", "");
-			}
-			else
-			{
-				cmd.Parameters.AddWithValue(@"emails", doc.Emails);
-			}
-			cmd.Parameters.AddWithValue(@"csscount", doc.CSSCount);
-			cmd.Parameters.AddWithValue(@"jscount", doc.JSCount);
-			cmd.Parameters.AddWithValue(@"approximatesize", doc.ApproxByteSize);
-
-			if (doc.Links != null)
-			{
-				cmd.Parameters.AddWithValue(@"links", doc.Links);
-			}
-			else
-			{
-				cmd.Parameters.AddWithValue(@"links", new List<string>());
-			}
-			cmd.Parameters.AddWithValue(@"contentstring", doc.ContentString);
-			cmd.Parameters.AddWithValue(@"imagedescriptions", imagealts);
-			cmd.Parameters.AddWithValue(@"imagelinks", imagelinks);
-			cmd.Parameters.AddWithValue(@"imagerelativeposition", imagepositions);
-			await cmd.PrepareAsync();
-			var state = await cmd.ExecuteNonQueryAsync();
-			con.Close();
-			con.Dispose();
-			if (state != -1)
-			{
-				return true;
-			}
-			else
-			{
-				return false;
-			}
-		}
+		
 
 		private static async Task<bool> RemoveDuplicatesAsync(NpgsqlConnection con)
 		{
@@ -498,5 +401,6 @@ namespace NetScraper
 			con.Dispose();
 			return prioritised;
 		}
+		*/
 	}
 }
