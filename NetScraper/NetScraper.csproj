@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="ADO.Net.Client" Version="1.4.4" />
+    <PackageReference Include="ComputeSharp" Version="2.0.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="7.0.1" />
     <PackageReference Include="MongoDB.Bson" Version="2.18.0" />
     <PackageReference Include="MongoDB.Driver" Version="2.18.0" />

@@ -11,6 +11,7 @@ namespace NetScraper
 		public int BatchesCompleted { get; set; }
 		public string ConnectionString { get; set; } = String.Empty;
 	}
+
 	public static class LogWriter
 	{
 		public static async Task<bool> WriteLinkBuffer(List<string> links)
@@ -25,8 +26,8 @@ namespace NetScraper
 			{
 				return false;
 			}
-
 		}
+
 		public static async Task<List<string>> ReadLinkBuffer(bool benchmark = false)
 		{
 			try
@@ -52,51 +53,41 @@ namespace NetScraper
 			}
 			catch (Exception)
 			{
-
 				throw;
 			}
 		}
+
 		public static JsonTextReader reader = new JsonTextReader(new StreamReader(CoreHandler.fileSettings));
-		public static async Task<bool> WriteSettingsJsonAsync()
+
+		public static async Task<bool> WriteSettingsJsonAsync(SettingObject obj)
 		{
-			JsonSerializer js = new JsonSerializer();
-			using (StreamWriter sw = new StreamWriter(CoreHandler.fileSettings))
-			using (JsonWriter writer = new JsonTextWriter(sw))
+			try
 			{
-				try
-				{
-					writer.WriteStartObject();
-					writer.WritePropertyName("StartedScraping");
-					writer.WriteValue(CoreHandler.StartedScraping);
-					writer.WritePropertyName("SimultaneousPool");
-					writer.WriteValue(CoreHandler.SimultaneousPool);
-					writer.WritePropertyName("ShouldRun");
-					writer.WriteValue(CoreHandler.shouldRun);
-					writer.WritePropertyName("ScrapesCompleted");
-					writer.WriteValue(CoreHandler.Scrapes);
-					writer.WritePropertyName("BatchesCompleted");
-					writer.WriteValue(CoreHandler.Batch);
-					writer.WritePropertyName("ConnectionString");
-					writer.WriteValue(CoreHandler.ConnectionString);
-					writer.WriteEndObject();
-					await writer.CloseAsync();
-					return true;
-				}
-				catch (Exception)
-				{
-					return false;
-				}
+				string json = JsonConvert.SerializeObject(obj);
+				Console.WriteLine(json);
+				File.WriteAllText(CoreHandler.fileSettings, json);
+				return true;
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine("Something went wrong");
+				Console.WriteLine(ex);
+				return false;
 			}
 		}
+
 		public static async Task<SettingObject> LoadJsonAsync()
 		{
+			var setting = new SettingObject();
 			using (StreamReader r = new StreamReader(CoreHandler.fileSettings))
 			{
 				string json = await r.ReadToEndAsync();
-				var setting = new SettingObject();
+
 				setting = JsonConvert.DeserializeObject<SettingObject>(json);
-				return setting;
+
+				r.Close();
 			}
+			return setting;
 		}
 	}
 }

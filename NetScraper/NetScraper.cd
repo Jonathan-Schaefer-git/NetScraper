@@ -1,37 +1,37 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <ClassDiagram MajorVersion="1" MinorVersion="1">
   <Class Name="NetScraper.CoreHandler">
-    <Position X="0.75" Y="2.75" Width="1.5" />
+    <Position X="1.75" Y="4" Width="1.5" />
     <TypeIdentifier>
-      <HashCode>AQAAAQAAAAAAAAAEAAAABAAoAgAAQARAACAEBAAMAAA=</HashCode>
+      <HashCode>CQAAAQAAAgAAAAAEAFEABAAgAgAAQARAACgEBAAMAAA=</HashCode>
       <FileName>CoreHandler.cs</FileName>
     </TypeIdentifier>
   </Class>
   <Class Name="NetScraper.Document" Collapsed="true">
     <Position X="6" Y="2.75" Width="1.5" />
     <TypeIdentifier>
-      <HashCode>AAAAAAEEgCAAIAAAAAAAAIAQAgAQEAQgCAAAAAAAAAA=</HashCode>
+      <HashCode>AAAAAAEEgCAAKAAAAAAAAIAQAgAAEAQgCAAAAAAAAAA=</HashCode>
       <FileName>Document.cs</FileName>
     </TypeIdentifier>
   </Class>
   <Class Name="NetScraper.Scraper">
     <Position X="9.25" Y="2" Width="1.5" />
     <TypeIdentifier>
-      <HashCode>AAAAAAAAAAAAAAAAAEAAAQAAAAAAAAAAAAhCAAAAAAA=</HashCode>
+      <HashCode>gAAAAAgAAABAAAAAAEAAAAAAAAAAAAAAAAhAAAAAAEA=</HashCode>
       <FileName>Scraper.cs</FileName>
     </TypeIdentifier>
   </Class>
   <Class Name="NetScraper.PostgreSQL">
     <Position X="8.75" Y="5.25" Width="2.25" />
     <TypeIdentifier>
-      <HashCode>AFAAAAAARAABAAACAAABAEAIAAYAQAIAgBAIAAAAAAA=</HashCode>
+      <HashCode>AAAAAAAARAAAAAACAAAAAAAAAAIAQAAAABAIAAAAAAA=</HashCode>
       <FileName>PostgreSQL.cs</FileName>
     </TypeIdentifier>
   </Class>
   <Class Name="NetScraper.Parser">
     <Position X="12.25" Y="1" Width="2.5" />
     <TypeIdentifier>
-      <HashCode>IBEAAAAAAAAABAAAAAQIAAAAgAMAKAAAAQgIAAAAAgg=</HashCode>
+      <HashCode>ABAAAAAAAAAABAAAAAQIAAAAgAMAKAAAAQgIAAAAAgg=</HashCode>
       <FileName>Parser.cs</FileName>
     </TypeIdentifier>
   </Class>

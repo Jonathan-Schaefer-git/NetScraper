@@ -1,4 +1,5 @@
 ﻿using Npgsql;
+using System.Collections.Concurrent;
 using System.Text;
 
 namespace NetScraper
@@ -42,7 +43,7 @@ namespace NetScraper
 			}
 		}
 
-		public static async Task<bool> PushDocumentListAsync(List<Document> documents)
+		public static async Task<bool> PushDocumentListAsync(ConcurrentBag<Document> documents)
 		{
 			Console.WriteLine("Called PushDocuments");
 			var counter = 0;

@@ -1,6 +1,5 @@
 ﻿using HtmlAgilityPack;
 using System.Diagnostics;
-using System.Net;
 using System.Text;
 
 namespace NetScraper
@@ -26,12 +25,28 @@ namespace NetScraper
 
 			//Open a new Document
 			var document = new Document();
-			document.Absoluteurl = new Uri(url);
+			try
+			{
+				document.Absoluteurl = new Uri(url);
+			}
+			catch (Exception)
+			{
+				document.Absoluteurl = new Uri("");
+				document.Status = false;
+				document.DateTime = DateTime.UtcNow;
+			}
 
 			//Get HTMLDocument and time it
 
 			var stopwatch = Stopwatch.StartNew();
-			document.HTMLString = await GetHTMLString(document);
+			try
+			{
+				document.HTMLString = await GetHTMLString(document);
+			}
+			catch (Exception)
+			{
+				document.HTMLString = null;
+			}
 			stopwatch.Stop();
 
 			if (verbose)
@@ -63,7 +78,6 @@ namespace NetScraper
 				//Tasks that are dependent on the result of Linkslist
 				var prioritisedlinksTask = Task.Run(() => Parser.FindPrioritisedLinks(document));
 				var imagedataTask = Task.Run(() => Parser.RetrieveImageData(document));
-				
 
 				//Wait for all Tasks to finish execution
 				await Task.WhenAll(jslinksTask, csslinksTask, emailTask, prioritisedlinksTask, imagedataTask);
@@ -108,6 +122,7 @@ namespace NetScraper
 				return document;
 			}
 		}
+
 		//! This is a test method and it may not be reliable and/or scalable
 		public static async Task<Document> ScrapExperimental(string url, bool verbose)
 		{
@@ -155,7 +170,6 @@ namespace NetScraper
 				//emailTask is reliant on the Contentstring
 				document.Emails = Parser.GetEmailOutOfString(document);
 
-
 				//Get JS & CSS Links Count
 				if (document.CSSLinks is not null && document.JSLinks is not null)
 				{
@@ -190,45 +204,9 @@ namespace NetScraper
 			}
 		}
 
-		public static async Task<string>? GetHTMLString(Document document)
+		public static Task<string>? GetHTMLString(Document document)
 		{
-			string htmlString;
-			try
-			{
-				htmlString = await webclient.GetStringAsync(document.Absoluteurl);
-			}
-			catch (Exception)
-			{
-				return "";
-			}
-			return htmlString;
-		}
-
-		public static HtmlDocument GetDocument(Document document)
-		{
-			web.PreRequest = delegate (HttpWebRequest webRequest)
-			{
-				webRequest.Timeout = 1000;
-				webRequest.AllowAutoRedirect = true;
-				webRequest.MaximumAutomaticRedirections = 3;
-				return true;
-			};
-			try
-			{
-				var doc = web.Load(document.Absoluteurl.ToString());
-				if (doc is null)
-				{
-					return null;
-				}
-				else
-				{
-					return doc;
-				}
-			}
-			catch (Exception)
-			{
-				return null;
-			}
+			return webclient.GetStringAsync(document.Absoluteurl);
 		}
 	}
 }

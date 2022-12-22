@@ -24,9 +24,10 @@ namespace NetScraper
 			Console.ForegroundColor = ConsoleColor.White;
 			Console.WriteLine(".NETScraper developed by Jona4Dev");
 			Console.WriteLine("Reading Settings from {0}", fileSettings);
-			var settings = await LogWriter.LoadJsonAsync();
+			var oldsettings = await LogWriter.LoadJsonAsync();
+			PostgreSQL.cs = oldsettings.ConnectionString;
+			//! This sets the webclient timeout for scraping
 			Scraper.webclient.Timeout = TimeSpan.FromSeconds(1);
-			Batch = settings.BatchesCompleted;
 			Console.WriteLine("https://github.com/Jona4Play/NetScraper");
 			Console.WriteLine("=========================================");
 			Console.WriteLine("Type 'help' to get the list of commands");
@@ -49,7 +50,7 @@ namespace NetScraper
 						Console.WriteLine("=========================================");
 						Console.ForegroundColor = ConsoleColor.Cyan;
 						Console.WriteLine("reset - Reset table and start scraping (Need for providing links to default stacks)");
-						Console.WriteLine("load - Load links from file to default stack");
+						Console.WriteLine("load - Load links from file to default stack. Use -t parameter to load benchmarking batch");
 						Console.WriteLine("writebuffer - Write default stack to file");
 						Console.WriteLine("init - Initialize default stack with standard links");
 						Console.WriteLine("info - Get the rows of Maindata");
@@ -78,26 +79,31 @@ namespace NetScraper
 
 					case "start":
 						Console.WriteLine();
-						StartedScraping = DateTime.Now;
-						await LogWriter.WriteSettingsJsonAsync();
 						var state = await RunScraper(startlinks);
-						if (state)
+						switch (state)
 						{
-							Console.WriteLine("Scraping was stopped through interaction with the settings file");
+							case -1:
+								WriteErrorMessage("No links were provided. Try again after running >init");
+								break;
+							case 0:
+								WriteSuccessMessage("Scraping was stopped through interaction with the settings file");
+								break;
+							case 1:
+								Console.WriteLine("This is in single run mode. Remove return 1;");
+								break;
 						}
 						break;
 
 					case "load":
 						startlinks = await LogWriter.ReadLinkBuffer();
-						if (startlinks is not null)
+						if (startlinks.Count is not 0)
 						{
 							Console.ForegroundColor = ConsoleColor.Green;
 							Console.WriteLine("[Info]: Loaded {0} links", startlinks.Count);
 						}
 						else
 						{
-							Console.ForegroundColor = ConsoleColor.Red;
-							Console.WriteLine("[Error]: Failed loading links");
+							WriteErrorMessage("No links in link buffer");
 						}
 						Console.ForegroundColor = ConsoleColor.White;
 						break;
@@ -106,30 +112,41 @@ namespace NetScraper
 						var writestate = await LogWriter.WriteLinkBuffer(startlinks);
 						if (writestate)
 						{
-							Console.ForegroundColor = ConsoleColor.Green;
-							Console.WriteLine("[Info]: Writing to file was successful");
+							WriteSuccessMessage("Wrote Buffer");
 						}
 						else
 						{
-							Console.ForegroundColor = ConsoleColor.Red;
-							Console.WriteLine("[Error]: Writing to file failed");
+							WriteErrorMessage("Failed writing buffer");
 						}
-						Console.ForegroundColor = ConsoleColor.White;
 						break;
 
 					case "init":
-						Console.WriteLine("=========================================");
-						Console.ForegroundColor = ConsoleColor.Green;
-						Console.WriteLine("[Info]: Supplying Program with start links");
-						Console.ForegroundColor = ConsoleColor.White;
+						WriteSuccessMessage("Supplied program with startlinks");
 						startlinks.Add("https://www.wikipedia.org/");
 						startlinks.Add("https://de.wikipedia.org");
 						break;
 
 					case "res":
-						Console.WriteLine("=========================================");
-						Console.WriteLine("Reset Startlinks");
+						WriteSuccessMessage("Reset startlinks");
 						startlinks.Clear();
+						break;
+
+					case "reset -s":
+						SettingObject settings = new SettingObject();
+						settings.SimultaneousPool = SimultaneousPool;
+						settings.ShouldRun = true;
+						settings.BatchesCompleted = Batch;
+						settings.ConnectionString = ConnectionString;
+						settings.ScrapesCompleted = Scrapes;
+						var settingstate = await LogWriter.WriteSettingsJsonAsync(settings);
+						if (settingstate)
+						{
+							WriteSuccessMessage("Reset settings.json");
+						}
+						else
+						{
+							WriteErrorMessage("Something went wrong trying to write settings.json");
+						}
 						break;
 
 					case "reset":
@@ -138,17 +155,11 @@ namespace NetScraper
 						await Task.WhenAll(resettasks);
 						if (resettasks[0].Result is true)
 						{
-							Console.WriteLine("=========================================");
-							Console.ForegroundColor = ConsoleColor.Green;
-							Console.WriteLine("[Info]: Resetting Tables was successful");
-							Console.ForegroundColor = ConsoleColor.White;
+							WriteSuccessMessage("Reset was successful");
 						}
 						else
 						{
-							Console.WriteLine("=========================================");
-							Console.ForegroundColor = ConsoleColor.Red;
-							Console.WriteLine("[Error]: Resetting wasn't successful");
-							Console.ForegroundColor = ConsoleColor.White;
+							WriteErrorMessage("Table Reset failed");
 						}
 						break;
 
@@ -156,7 +167,7 @@ namespace NetScraper
 						Console.WriteLine("=========================================");
 						Console.WriteLine("[Info]: Started Experimental");
 						Console.WriteLine("=========================================");
-						var expstate = await RunScraperAlternativeScheduler(startlinks);
+						//var expstate = await RunScraperAlternativeScheduler(startlinks);
 						break;
 
 					case "info":
@@ -184,20 +195,23 @@ namespace NetScraper
 			}
 		}
 
-		private static async Task<bool> RunScraper(List<string> startlinks)
+		private static async Task<int> RunScraper(List<string> startlinks)
 		{
 			List<string> outstanding = new List<string>();
 			ConcurrentBag<string> clinks = new ConcurrentBag<string>();
 			if (outstanding.Count is 0 && startlinks.Count is 0)
 			{
 				Console.WriteLine("No links provided. Exiting");
-				return false;
+				return -1;
 			}
+
+			var setting = await LogWriter.LoadJsonAsync();
+			setting.StartedScraping = DateTime.Now;
+			await LogWriter.WriteSettingsJsonAsync(setting);
 
 			while (shouldRun)
 			{
-
-
+				
 
 				Console.WriteLine("Start Cycle");
 				if (outstanding.Count is 0)
@@ -216,6 +230,7 @@ namespace NetScraper
 					{
 						clinks.Add(item);
 					}
+					outstanding.Clear();
 				}
 
 				Console.WriteLine("Links to Scrap: " + clinks.Count);
@@ -224,47 +239,160 @@ namespace NetScraper
 				ParallelOptions parallel = new ParallelOptions();
 				parallel.CancellationToken = CancellationToken.None;
 
+				//! Launching tasks via Parallel.ForEachAsync() as it determines the maximal degree of parallelism automatically to maximize performance
 				await Parallel.ForEachAsync(clinks, parallel, async (item, _) =>
 				{
 					documents.Add(await Scraper.ScrapFromLinkAsync(item));
 				});
 
-				//Push Results to DB
-				var state = PostgreSQL.PushDocumentListAsync(documents.ToList());
+				//! Push Results to DB
+				var state = PostgreSQL.PushDocumentListAsync(documents);
+				var write = LogWriter.WriteLinkBuffer(outstanding);
+
+
 				Console.WriteLine("Document Count: " + documents.Count);
 
-				//Free links of duplicates and excess
-				outstanding = CleanUpOutstanding(outstanding, documents.ToList());
+				//! Free links of duplicates and excess
+				outstanding = CleanUpOutstanding(ref outstanding, ref documents);
+				clinks.Clear();
 				Console.WriteLine("Outstanding Count next gen: " + outstanding.Count);
 
-				//Wait for the result of the DB Push
+				var oldsettings = await LogWriter.LoadJsonAsync();
+				shouldRun = oldsettings.ShouldRun;
+				Console.WriteLine("Should Run: " + shouldRun);
+				Batch = oldsettings.BatchesCompleted;
+
+				//! Wait for the result of the DB Push && writing to file
+				await write;
 				await state;
 				if (state.Result)
 				{
-					Console.WriteLine("=========================================");
-					Console.ForegroundColor = ConsoleColor.Green;
-					Console.WriteLine("Push to DB was successful");
-					Console.ForegroundColor = ConsoleColor.White;
-					Console.WriteLine("=========================================");
+					WriteSuccessMessage("Pushed to DB");
 				}
 				else
 				{
-					Console.WriteLine("=========================================");
-					Console.ForegroundColor = ConsoleColor.Red;
-					Console.WriteLine("Push to DB failed");
-					Console.ForegroundColor = ConsoleColor.White;
-					Console.WriteLine("=========================================");
+					WriteErrorMessage("DB push failed");
 				}
-				return true;
+				
+				if (write.Result)
+				{
+					WriteSuccessMessage("Wrote buffer", true);
+				}
+				else
+				{
+					WriteErrorMessage("Failed writing buffer", true);
+				}
+				var x = await PostgreSQL.GetScrapingCount();
+				Batch++;
+				documents.Clear();
+				oldsettings.BatchesCompleted = Batch;
+				oldsettings.ScrapesCompleted = x;
+				var settingstate = await LogWriter.WriteSettingsJsonAsync(oldsettings);
+				if (settingstate)
+				{
+					WriteSuccessMessage("Wrote settings", true);
+				}
+				else
+				{
+					WriteErrorMessage("Failed writing settings.json", true);
+				}
+
+				//! This is used for single run testing and should be commented by default
+				//return 1;
 			}
-			return false;
+			//! Returning to menu
+			return 0;
 		}
 
+		public static void WriteSuccessMessage(string content, bool bottomline = false)
+		{
+			Console.WriteLine("=========================================");
+			Console.ForegroundColor = ConsoleColor.Green;
+			Console.WriteLine("[Success]: " + content);
+			Console.ForegroundColor = ConsoleColor.White;
+			if(bottomline)
+				Console.WriteLine("=========================================");
+		}
 
+		public static void WriteErrorMessage(string content, bool bottomline = false)
+		{
+			Console.WriteLine("=========================================");
+			Console.ForegroundColor = ConsoleColor.Red;
+			Console.WriteLine("[Error]: " + content);
+			Console.ForegroundColor = ConsoleColor.White;
+			if(bottomline)
+				Console.WriteLine("=========================================");
+		}
 
-		//! This 
+		//! Overload for Parallel.ForEach with ConcurrentBag
+		private static List<string> CleanUpOutstanding(ref List<string> oustandinglastgen, ref ConcurrentBag<Document> documents)
+		{
+			List<string> outstandingLinks = new List<string>();
+			List<string> prioritisedLinks = new List<string>();
+
+			foreach (var document in documents)
+			{
+				if (document.Links is not null)
+				{
+					outstandingLinks.AddRange(document.Links);
+				}
+				if (document.PrioritisedLinks is not null)
+				{
+					prioritisedLinks.AddRange(document.PrioritisedLinks);
+				}
+			}
+
+			foreach (var link in oustandinglastgen)
+			{
+				outstandingLinks.Remove(link);
+				prioritisedLinks.Remove(link);
+			}
+
+			outstandingLinks.RemoveAll(item => !item.StartsWith("http"));
+			prioritisedLinks.RemoveAll(item => !item.StartsWith("http"));
+
+			outstandingLinks.RemoveAll(item => item.EndsWith("pdf") || item.EndsWith("gif") || item.EndsWith("png") || item.EndsWith("webp") || item.EndsWith("svg") || item.EndsWith("jpg"));
+			prioritisedLinks.RemoveAll(item => item.StartsWith("pdf") || item.EndsWith("gif") || item.EndsWith("png") || item.EndsWith("webp") || item.EndsWith("svg") || item.EndsWith("jpg"));
+
+			List<string> outstandingLinksnd = new HashSet<string>(outstandingLinks).ToList();
+			List<string> prioritisedLinksnd = new HashSet<string>(prioritisedLinks).ToList();
+
+			switch (prioritisedLinksnd.Count > BatchLimit)
+			{
+				case true:
+					Console.WriteLine("Path: True");
+					prioritisedLinksnd.RemoveRange(BatchLimit, prioritisedLinksnd.Count - BatchLimit);
+					return prioritisedLinksnd;
+
+				case false:
+					if (prioritisedLinksnd.Count == BatchLimit)
+					{
+						Console.WriteLine("Path: False: ==");
+						return prioritisedLinksnd;
+					}
+					else
+					{
+						if (prioritisedLinksnd.Count + outstandingLinksnd.Count >= 5000)
+						{
+							Console.WriteLine("Path: False: >=");
+							prioritisedLinksnd.AddRange(outstandingLinksnd.GetRange(prioritisedLinksnd.Count, BatchLimit - prioritisedLinksnd.Count));
+							return prioritisedLinksnd;
+						}
+						else
+						{
+							Console.WriteLine("Path: False: <");
+							prioritisedLinksnd.AddRange(outstandingLinksnd);
+							return prioritisedLinksnd;
+						}
+					}
+			}
+		}
+
+		//! This is a bad alternative Scheduler
+		/*
 		private static async Task<bool> RunScraperAlternativeScheduler(List<string> startlinks)
 		{
+			
 			Console.WriteLine("Called Alternative Scheduler");
 			List<string> outstandingLinks = new List<string>();
 			List<string> prioritisedLinks = new List<string>();
@@ -275,12 +403,12 @@ namespace NetScraper
 			{
 				Console.WriteLine("Started Cycle");
 				
-				//Get Links to be scraped from DB up to a maximum of 5k strings per batch
+				//! Get Links to be scraped from DB up to a maximum of 5k strings per batch
 
 				outstanding.AddRange(outstanding);
 				Console.WriteLine("Outstanding Count: " + outstanding.Count());
 
-				//Check settings (Used for web interface)
+				//! Check settings (Used for web interface)
 				var setting = await LogWriter.LoadJsonAsync();
 				shouldRun = setting.ShouldRun;
 				SimultaneousPool = setting.SimultaneousPool;
@@ -309,7 +437,7 @@ namespace NetScraper
 
 					Scrapes = await getscrapecount;
 					Batch++;
-					var settingstate = await LogWriter.WriteSettingsJsonAsync();
+					//var settingstate = await LogWriter.WriteSettingsJsonAsync();
 					
 
 					
@@ -323,7 +451,7 @@ namespace NetScraper
 					{
 						Console.WriteLine("Writing buffer failed");
 					}
-					*/
+					
 
 				}
 				else
@@ -331,19 +459,24 @@ namespace NetScraper
 					Console.WriteLine("No links to Scrap");
 					return false;
 				}
+				
 				return true;
+				
 			}
+			
 			return true;
 		}
-
+		*/
 		//! This method is reserved for testing singular features
 		public static async Task<bool> DebugMethod(List<string> startlinks)
 		{
 			return true;
 		}
 		//! Legacy Method (refrain from usage)
+		/*
 		private static async Task<bool> RunScraperLegacy(List<string> startlinks)
 		{
+			
 			//Called RunScraper
 			Console.WriteLine("Called Scraping Method");
 
@@ -398,7 +531,7 @@ namespace NetScraper
 
 				Scrapes = await getscrapecount;
 				Batch++;
-				var settingstate = await LogWriter.WriteSettingsJsonAsync();
+				//var settingstate = await LogWriter.WriteSettingsJsonAsync();
 				await Task.WhenAll(pushtasks);
 
 				if (pushtasks.All(a => a.Result) || pushtasks.All(a => !a.Result))
@@ -419,11 +552,14 @@ namespace NetScraper
 				{
 					Console.WriteLine("Writing buffer failed");
 				}
-				*/
+				
 			}
+			
 			return true;
 		}
+		*/
 		//! Deprecated Task Scheduler
+		/*
 		private static async Task<List<Document>> Scraping(IEnumerable<string> links)
 		{
 			var tasks = links.Select(x => Task.Run(() => Scraper.ScrapFromLinkAsync(x))).ToArray();
@@ -437,10 +573,13 @@ namespace NetScraper
 			}
 			return documents;
 		}
+		*/
+
 		//! Bad alternative Task Scheduler
+		/*
 		private static async Task<List<Document>> QueingAlternative(IEnumerable<string> links)
 		{
-
+			
 			ConcurrentBag<string> clinks = new ConcurrentBag<string>(links);
 			ParallelOptions parallel = new ParallelOptions();
 			ConcurrentBag<Document> documents = new ConcurrentBag<Document>();
@@ -461,9 +600,11 @@ namespace NetScraper
 
 			return documents.ToList();
 		}
+		*/
 
 		//! This method is responsible for removing duplicates and bad links from the batch
-		private static List<string> CleanUpOutstanding(List<string> oustandinglastgen, List<Document> documents)
+		/*
+		private static List<string> CleanUpOutstanding(ref List<string> oustandinglastgen, ref List<Document> documents)
 		{
 			List<string> outstandingLinks = new List<string>();
 			List<string> prioritisedLinks = new List<string>();
@@ -508,13 +649,23 @@ namespace NetScraper
 					}
 					else
 					{
-						prioritisedLinksnd.AddRange(outstandingLinksnd.GetRange(prioritisedLinksnd.Count, BatchLimit - prioritisedLinksnd.Count));
-						return prioritisedLinksnd;
+						if(prioritisedLinksnd.Count + outstandingLinksnd.Count >= 5000)
+						{
+							prioritisedLinksnd.AddRange(outstandingLinksnd.GetRange(prioritisedLinksnd.Count, BatchLimit - prioritisedLinksnd.Count));
+							return prioritisedLinksnd;
+						}
+						else
+						{
+							prioritisedLinksnd.AddRange(outstandingLinksnd);
+							return prioritisedLinksnd;
+						}
 					}
 			}
 		}
+		*/
 
 		//! Overload for legacy method
+		/*
 		private static List<string> CleanUpOutstanding(List<string> oustandinglastgen, List<string> prioritised, List<string> normal)
 		{
 			foreach (var link in oustandinglastgen)
@@ -555,11 +706,12 @@ namespace NetScraper
 					}
 			}
 		}
-
+		
 		public static IEnumerable<List<T>> Partition<T>(this IList<T> source, Int32 size)
 		{
 			for (int i = 0; i < Math.Ceiling(source.Count / (Double)size); i++)
 				yield return new List<T>(source.Skip(size * i).Take(size));
 		}
+		*/
 	}
 }
