@@ -1,6 +1,7 @@
-﻿using MongoDB.Driver.Linq;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
+using BenchmarkDotNet;
+using BenchmarkDotNet.Attributes;
 
 namespace NetScraper
 {
@@ -122,8 +123,7 @@ namespace NetScraper
 
 					case "init":
 						WriteSuccessMessage("Supplied program with startlinks");
-						startlinks.Add("https://www.wikipedia.org/");
-						startlinks.Add("https://de.wikipedia.org");
+						startlinks.Add("https://wikipedia.de");
 						break;
 
 					case "res":
@@ -198,7 +198,8 @@ namespace NetScraper
 		private static async Task<int> RunScraper(List<string> startlinks)
 		{
 			List<string> outstanding = new List<string>();
-			ConcurrentBag<string> clinks = new ConcurrentBag<string>();
+			ConcurrentQueue<string> clinks = new ConcurrentQueue<string>();
+
 			if (outstanding.Count is 0 && startlinks.Count is 0)
 			{
 				Console.WriteLine("No links provided. Exiting");
@@ -220,7 +221,7 @@ namespace NetScraper
 					foreach (var item in startlinks)
 					{
 						Console.WriteLine(item);
-						clinks.Add(item);
+						clinks.Enqueue(item);
 					}
 				}
 				else
@@ -228,32 +229,33 @@ namespace NetScraper
 					Console.WriteLine("Outstanding isn't null");
 					foreach (var item in outstanding)
 					{
-						clinks.Add(item);
+						clinks.Enqueue(item);
 					}
 					outstanding.Clear();
 				}
+				
+
 
 				Console.WriteLine("Links to Scrap: " + clinks.Count);
-				var documents = new ConcurrentBag<Document>();
-
+				var documents = new ConcurrentQueue<Document>();
 				ParallelOptions parallel = new ParallelOptions();
 				parallel.CancellationToken = CancellationToken.None;
-
+				parallel.MaxDegreeOfParallelism = Environment.ProcessorCount * 2;
 				//! Launching tasks via Parallel.ForEachAsync() as it determines the maximal degree of parallelism automatically to maximize performance
 				await Parallel.ForEachAsync(clinks, parallel, async (item, _) =>
 				{
-					documents.Add(await Scraper.ScrapFromLinkAsync(item));
+					documents.Enqueue(await Scraper.ScrapFromLinkAsync(item));
 				});
 
 				//! Push Results to DB
 				var state = PostgreSQL.PushDocumentListAsync(documents);
-				var write = LogWriter.WriteLinkBuffer(outstanding);
+				var write = LogWriter.WriteLinkBuffer(clinks.ToList());
 
 
 				Console.WriteLine("Document Count: " + documents.Count);
 
 				//! Free links of duplicates and excess
-				outstanding = CleanUpOutstanding(ref outstanding, ref documents);
+				outstanding = CleanUpOutstanding(ref clinks, ref documents);
 				clinks.Clear();
 				Console.WriteLine("Outstanding Count next gen: " + outstanding.Count);
 
@@ -325,7 +327,7 @@ namespace NetScraper
 		}
 
 		//! Overload for Parallel.ForEach with ConcurrentBag
-		private static List<string> CleanUpOutstanding(ref List<string> oustandinglastgen, ref ConcurrentBag<Document> documents)
+		private static List<string> CleanUpOutstanding(ref ConcurrentQueue<string> oustandinglastgen, ref ConcurrentQueue<Document> documents)
 		{
 			List<string> outstandingLinks = new List<string>();
 			List<string> prioritisedLinks = new List<string>();
@@ -375,6 +377,8 @@ namespace NetScraper
 						if (prioritisedLinksnd.Count + outstandingLinksnd.Count >= 5000)
 						{
 							Console.WriteLine("Path: False: >=");
+							Console.WriteLine("Priotised Links Count: " + prioritisedLinksnd.Count);
+							Console.WriteLine("Normal Links Count: " + outstandingLinksnd.Count);
 							prioritisedLinksnd.AddRange(outstandingLinksnd.GetRange(prioritisedLinksnd.Count, BatchLimit - prioritisedLinksnd.Count));
 							return prioritisedLinksnd;
 						}

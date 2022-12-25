@@ -1,4 +1,4 @@
-﻿using HtmlAgilityPack;
+﻿
 
 namespace NetScraper
 {
@@ -7,12 +7,9 @@ namespace NetScraper
 	{
 		public bool Status { get; set; }
 		public double ResponseTime { get; set; }
-		public List<string>? Emails { get; set; }
 		public List<ImageData>? ImageData { get; set; }
 		//ER = External Resource
 		public List<string>? CSSLinks { get; set; }
-		public int CSSCount { get; set; }
-		public int JSCount { get; set; }
 		public List<string>? JSLinks { get; set; }
 		public DateTime DateTime { get; set; }
 		public Uri? Absoluteurl { get; set; }

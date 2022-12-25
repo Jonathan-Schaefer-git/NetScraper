@@ -1,6 +1,4 @@
-﻿using HtmlAgilityPack;
-using System.Text.RegularExpressions;
-using System.Web;
+﻿using System.Text.RegularExpressions;
 
 namespace NetScraper
 {
@@ -22,11 +20,11 @@ namespace NetScraper
 
 		public static List<ImageData>? RetrieveImageData(Document doc)
 		{
-			if(doc.HTMLString is not null)
+			if (doc.HTMLString is not null)
 			{
 				var imagedatalist = new List<ImageData>();
 				string pattern = @"<img src=""(?<src>.+?)"" alt=""(?<description>.+?)"">";
-				Regex regex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
+				Regex regex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 				MatchCollection matches = regex.Matches(doc.HTMLString);
 
 				foreach (Match match in matches)
@@ -34,8 +32,8 @@ namespace NetScraper
 					if (match.Success)
 					{
 						ImageData img = new ImageData();
-						
-						img.Link = GetAbsoluteUrlString(doc.Absoluteurl.ToString() ,match.Groups["src"].Value);
+
+						img.Link = GetAbsoluteUrlString(doc.Absoluteurl.ToString(), match.Groups["src"].Value);
 						img.Alt = match.Groups["description"].Value;
 						imagedatalist.Add(img);
 					}
@@ -57,67 +55,52 @@ namespace NetScraper
 		{
 			var linklist = new List<string>();
 
-			try
+			if (doc.HTMLString is not null)
 			{
-				if (doc.HTMLString is not null)
+				var htmlstring = doc.HTMLString;
+				var values = htmlstring.Split("\"");
+				var jsFiles = values.Where(value => value.Contains(".css"));
+
+				foreach (var jsfile in jsFiles)
 				{
-					var htmlstring = doc.HTMLString;
-					var values = htmlstring.Split("\"");
-					var jsFiles = values.Where(value => value.Contains(".css"));
-
-					foreach (var jsfile in jsFiles)
+					if (!CheckLinkValidity(jsfile))
 					{
-						if (!CheckLinkValidity(jsfile))
-						{
-							linklist.Add(GetAbsoluteUrlString(doc.Absoluteurl.ToString(), jsfile));
-						}
-						else
-						{
-							linklist.Add(jsfile);
-						}
+						linklist.Add(GetAbsoluteUrlString(doc.Absoluteurl.ToString(), jsfile));
 					}
-
-					return linklist;
+					else
+					{
+						linklist.Add(jsfile);
+					}
 				}
-				return null;
+
+				return linklist;
 			}
-			catch (Exception)
-			{
-				return null;
-			}
+			return null;
 		}
 
 		public static List<string>? RetrieveJSLinks(Document doc)
 		{
 			var linklist = new List<string>();
-			try
-			{
-				if (doc.HTMLString is not null)
-				{
-					var htmlstring = doc.HTMLString;
-					var values = htmlstring.Split("\"");
-					var jsFiles = values.Where(value => value.Contains(".js"));
-					//Console.WriteLine("Looking for JS and CSS");
-					foreach (var jsfile in jsFiles)
-					{
-						if (!CheckLinkValidity(jsfile))
-						{
-							linklist.Add(GetAbsoluteUrlString(doc.Absoluteurl.ToString(), jsfile));
-						}
-						else
-						{
-							linklist.Add(jsfile);
-						}
-					}
 
-					return linklist;
-				}
-				return null;
-			}
-			catch (Exception)
+			if (doc.HTMLString is not null)
 			{
-				return null;
+				var jsFiles = doc.HTMLString.Split("\"").Where(value => value.Contains(".js"));
+
+				foreach (var jsfile in jsFiles)
+				{
+					if (!CheckLinkValidity(jsfile))
+					{
+						linklist.Add(GetAbsoluteUrlString(doc.Absoluteurl.ToString(), jsfile));
+					}
+					else
+					{
+						linklist.Add(jsfile);
+					}
+				}
+
+				return linklist;
 			}
+			return null;
 		}
 
 		private static string? GetAbsoluteUrlString(string baseUrl, string url)
@@ -189,7 +172,7 @@ namespace NetScraper
 				{
 					foreach (var link in links)
 					{
-						if(link is not null or "")
+						if (link is not null or "")
 						{
 							if (link.StartsWith("http://") || link.StartsWith("https://"))
 							{
@@ -208,44 +191,30 @@ namespace NetScraper
 			return null;
 		}
 
-		public static List<string>? GetEmailOutOfString(Document document)
+		public static string Strip(string text)
 		{
-			List<string>? result = new List<string>();
+			var validCharacters = new char[text.Length];
+			var next = 0;
 
-			if (document.HTMLString is not null)
+			for (int i = 0; i < text.Length; i++)
 			{
-				Regex regex = new Regex(@"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-				MatchCollection matches = regex.Matches(document.HTMLString);
-				if (matches.Count == 0)
+				char c = text[i];
+
+				switch (c)
 				{
-					return null;
+					case ' ':
+					case '\r':
+					case '\n':
+						// Ignore then
+						break;
+
+					default:
+						validCharacters[next++] = c;
+						break;
 				}
-				foreach (Match match in matches)
-				{
-					if (match.Value.EndsWith(".png") || match.Value.EndsWith(".gif") || match.Value.EndsWith(".svg") || match.Value.EndsWith(".jpg") || match.Value.EndsWith(".webp") || match.Value.EndsWith(".pdf"))
-					{
-
-					}
-					else
-					{
-						result.Add(match.Value);
-					}
-				}
-				List<string>? email = result.Distinct().ToList();
-
-				return email;
 			}
-			return null;
-		}
 
-		public static string? ConvertDocToString(Document doc)
-		{
-			if (doc.HTMLString is null)
-			{
-				return null;
-			}
-			return Regex.Replace((RemoveInsignificantHtmlWhiteSpace(doc.HTMLString) ?? "").Replace("'", @"\'").Trim(), @"[\r\n]+", " ");
-			
+			return new string(validCharacters, 0, next);
 		}
 	}
 }

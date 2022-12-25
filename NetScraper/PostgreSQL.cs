@@ -1,6 +1,5 @@
 ﻿using Npgsql;
 using System.Collections.Concurrent;
-using System.Text;
 
 namespace NetScraper
 {
@@ -28,7 +27,7 @@ namespace NetScraper
 				cmd.CommandText = "DROP TABLE IF EXISTS maindata cascade";
 				var x = await cmd.ExecuteNonQueryAsync();
 
-				cmd.CommandText = @"CREATE TABLE maindata(id SERIAL PRIMARY KEY, status BOOLEAN, url TEXT, datetime TEXT, emails TEXT[], csscount INTEGER, jscount INTEGER, approximatesize INTEGER, links TEXT[], contentstring TEXT, imagedescriptions TEXT[], imagelinks TEXT[])";
+				cmd.CommandText = @"CREATE TABLE maindata(id SERIAL PRIMARY KEY, status BOOLEAN, url TEXT, datetime TEXT, csslinks TEXT[], jslinks TEXT[], approximatesize INTEGER, links TEXT[], contentstring TEXT, imagedescriptions TEXT[], imagelinks TEXT[])";
 				Console.WriteLine("Resetted maindata");
 				await cmd.ExecuteNonQueryAsync();
 				con.Close();
@@ -43,18 +42,14 @@ namespace NetScraper
 			}
 		}
 
-		public static async Task<bool> PushDocumentListAsync(ConcurrentBag<Document> documents)
+		public static async Task<bool> PushDocumentListAsync(ConcurrentQueue<Document> documents)
 		{
 			Console.WriteLine("Called PushDocuments");
 			var counter = 0;
 			using (var con = EstablishDBConnection())
 			{
 				con.Open();
-				var sql = @"INSERT INTO maindata(status, url, datetime, emails, csscount, jscount, approximatesize, links, contentstring, imagedescriptions, imagelinks) VALUES(@status, @url, @datetime, @emails, @csscount, @jscount, @approximatesize, @links, @contentstring, @imagedescriptions ,@imagelinks)";
-
-
-				Console.WriteLine("Documents Count: " + documents.Count());
-
+				var sql = @"INSERT INTO maindata(status, url, datetime, csslinks, jslinks, approximatesize, links, contentstring, imagedescriptions, imagelinks) VALUES(@status, @url, @datetime, @csslinks, @jslinks, @approximatesize, @links, @contentstring, @imagedescriptions ,@imagelinks)";
 
 				foreach (var doc in documents)
 				{
@@ -102,16 +97,41 @@ namespace NetScraper
 						throw new Exception("Website was added without Value");
 					}
 					cmd.Parameters.AddWithValue(@"datetime", doc.DateTime.ToString());
-					if (doc.Emails is null)
+
+
+					if(doc.CSSLinks is not null)
 					{
-						cmd.Parameters.AddWithValue(@"emails", new List<string>());
+						if(doc.CSSLinks.Count is not 0)
+						{
+							cmd.Parameters.AddWithValue(@"csslinks", doc.CSSLinks);
+						}
+						else
+						{
+							cmd.Parameters.AddWithValue(@"csslinks", new List<string>());
+						}
+							
 					}
 					else
 					{
-						cmd.Parameters.AddWithValue(@"emails", doc.Emails);
+						cmd.Parameters.AddWithValue(@"csslinks", new List<string>());
 					}
-					cmd.Parameters.AddWithValue(@"csscount", doc.CSSCount);
-					cmd.Parameters.AddWithValue(@"jscount", doc.JSCount);
+					if (doc.JSLinks is not null)
+					{
+						if (doc.JSLinks.Count is not 0)
+						{
+							cmd.Parameters.AddWithValue(@"jslinks", doc.JSLinks);
+						}
+						else
+						{
+							cmd.Parameters.AddWithValue(@"jslinks", new List<string>());
+						}
+
+					}
+					else
+					{
+						cmd.Parameters.AddWithValue(@"jslinks", new List<string>());
+					}
+
 					cmd.Parameters.AddWithValue(@"approximatesize", doc.ApproxByteSize);
 
 					if (doc.Links is not null)
@@ -124,7 +144,7 @@ namespace NetScraper
 					}
 					if (doc.HTMLString is not null)
 					{
-						cmd.Parameters.AddWithValue(@"contentstring",Parser.RemoveInsignificantHtmlWhiteSpace(doc.HTMLString));
+						cmd.Parameters.AddWithValue(@"contentstring", Parser.Strip(doc.HTMLString));
 					}
 
 					cmd.Parameters.AddWithValue(@"imagedescriptions", imagealts);
@@ -151,9 +171,8 @@ namespace NetScraper
 					return true;
 				}
 			}
-
-
 		}
+
 		public static async Task<long> GetScrapingCount()
 		{
 			using (var con = EstablishDBConnection())
@@ -177,6 +196,7 @@ namespace NetScraper
 				}
 			}
 		}
+
 		private static NpgsqlConnection EstablishDBConnection()
 		{
 			try
@@ -190,7 +210,6 @@ namespace NetScraper
 				return null;
 			}
 		}
-
 
 		//! These methods are deprecated. Do not use
 		/*
@@ -284,7 +303,6 @@ namespace NetScraper
 			{
 				return false;
 			}
-
 		}
 
 		public static async Task<bool> PushPrioritisedAsync(List<string> prioritised)
@@ -323,12 +341,6 @@ namespace NetScraper
 			con.Dispose();
 			return true;
 		}
-
-
-
-
-
-		
 
 		private static async Task<bool> RemoveDuplicatesAsync(NpgsqlConnection con)
 		{

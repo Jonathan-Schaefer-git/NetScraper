@@ -1,13 +1,10 @@
-﻿using HtmlAgilityPack;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text;
 
 namespace NetScraper
 {
 	internal static class Scraper
 	{
-		private static HtmlWeb web = new HtmlWeb();
-
 		private static HttpClientHandler handler = new HttpClientHandler()
 		{
 			AllowAutoRedirect = true,
@@ -18,12 +15,7 @@ namespace NetScraper
 
 		public static async Task<Document> ScrapFromLinkAsync(string url, bool verbose = false)
 		{
-			if (verbose)
-			{
-				Console.WriteLine("Called Scraper for {0}", url);
-			}
-
-			//Open a new Document
+			//! Open a new Document
 			var document = new Document();
 			try
 			{
@@ -31,12 +23,14 @@ namespace NetScraper
 			}
 			catch (Exception)
 			{
-				document.Absoluteurl = new Uri("");
+				//! Indicate error
+				document.Absoluteurl = new Uri("https://somethingfailed.com");
 				document.Status = false;
 				document.DateTime = DateTime.UtcNow;
+				return document;
 			}
 
-			//Get HTMLDocument and time it
+			//! Get HTMLDocument and time it
 
 			var stopwatch = Stopwatch.StartNew();
 			try
@@ -45,15 +39,17 @@ namespace NetScraper
 			}
 			catch (Exception)
 			{
+				//! Return on exception
 				document.HTMLString = null;
+				document.Status = false;
+				document.DateTime = DateTime.UtcNow;
+				document.ResponseTime = 0;
+				return document;
 			}
 			stopwatch.Stop();
 
-			if (verbose)
-				Console.WriteLine("Getting {0} took {1}ms", document.Absoluteurl, stopwatch.ElapsedMilliseconds);
-
 			//Check if Website responded
-			if (document.HTMLString is not null or "")
+			if (document.HTMLString is not null)
 			{
 				document.DateTime = DateTime.UtcNow;
 
@@ -63,12 +59,11 @@ namespace NetScraper
 				//Set Response time of Website
 				document.ResponseTime = stopwatch.ElapsedMilliseconds;
 
-				var contentstringTask = Task.Run(() => Parser.ConvertDocToString(document));
 				var jslinksTask = Task.Run(() => Parser.RetrieveJSLinks(document));
 				var csslinksTask = Task.Run(() => Parser.RetrieveCSSLinks(document));
 				var linklistTask = Task.Run(() => Parser.ParseLinks(document));
-				var emailTask = Task.Run(() => Parser.GetEmailOutOfString(document));
 				var linklist = await linklistTask;
+
 				if (linklist != null)
 				{
 					linklist.RemoveAll(x => String.IsNullOrEmpty(x));
@@ -80,50 +75,27 @@ namespace NetScraper
 				var imagedataTask = Task.Run(() => Parser.RetrieveImageData(document));
 
 				//Wait for all Tasks to finish execution
-				await Task.WhenAll(jslinksTask, csslinksTask, emailTask, prioritisedlinksTask, imagedataTask);
+				await Task.WhenAll(jslinksTask, csslinksTask, prioritisedlinksTask, imagedataTask);
 
 				//Set properties
 				document.PrioritisedLinks = prioritisedlinksTask.Result;
 				document.CSSLinks = csslinksTask.Result;
-				document.Emails = emailTask.Result;
 				document.JSLinks = jslinksTask.Result;
 				document.ImageData = imagedataTask.Result;
+				document.ApproxByteSize = ASCIIEncoding.Unicode.GetByteCount(document.HTMLString);
 
-				//Get JS & CSS Links Count
-				if (document.CSSLinks is not null && document.JSLinks is not null)
-				{
-					document.CSSCount = document.CSSLinks.Count();
-					document.JSCount = document.JSLinks.Count();
-				}
-				else
-				{
-					document.CSSCount = 0;
-					document.JSCount = 0;
-				}
-
-				try
-				{
-					if (document.HTMLString is not null)
-					{
-						document.ApproxByteSize = ASCIIEncoding.Unicode.GetByteCount(document.HTMLString);
-					}
-				}
-				catch (Exception ex)
-				{
-					Console.WriteLine(ex);
-				}
 				return document;
 			}
 			else
 			{
 				document.DateTime = DateTime.UtcNow;
-				//Console.WriteLine("Website hasn't responded");
 				document.Status = false;
 				return document;
 			}
 		}
 
 		//! This is a test method and it may not be reliable and/or scalable
+		/*
 		public static async Task<Document> ScrapExperimental(string url, bool verbose)
 		{
 			if (verbose)
@@ -138,7 +110,14 @@ namespace NetScraper
 			//Get HTMLDocument and time it
 
 			var stopwatch = Stopwatch.StartNew();
-			document.HTMLString = await GetHTMLString(document);
+			try
+			{
+				document.HTMLString = await GetHTMLString(document);
+			}
+			catch (Exception)
+			{
+				document.HTMLString = null;
+			}
 			stopwatch.Stop();
 
 			if (verbose)
@@ -167,9 +146,6 @@ namespace NetScraper
 				document.PrioritisedLinks = Parser.FindPrioritisedLinks(document);
 				document.ImageData = Parser.RetrieveImageData(document);
 
-				//emailTask is reliant on the Contentstring
-				document.Emails = Parser.GetEmailOutOfString(document);
-
 				//Get JS & CSS Links Count
 				if (document.CSSLinks is not null && document.JSLinks is not null)
 				{
@@ -203,6 +179,7 @@ namespace NetScraper
 				return document;
 			}
 		}
+		*/
 
 		public static Task<string>? GetHTMLString(Document document)
 		{
