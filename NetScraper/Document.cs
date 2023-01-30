@@ -14,6 +14,7 @@ namespace NetScraper
 		public int CSSCount { get; set; }
 		public int JSCount { get; set; }
 		public List<string>? JSLinks { get; set; }
+
 		public DateTime DateTime { get; set; }
 		public Uri? Absoluteurl { get; set; }
 		public long ApproxByteSize { get; set; }

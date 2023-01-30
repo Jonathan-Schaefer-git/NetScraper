@@ -1,6 +1,6 @@
-﻿using MongoDB.Driver.Linq;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net;
 
 namespace NetScraper
 {
@@ -18,7 +18,8 @@ namespace NetScraper
 		public static string fileTestBatch = Path.Combine(filepath, "testbatch.json");
 		public static string fileSettings = Path.Combine(filepath, "settings.json");
 		public static string fileNameCSV = Path.Combine(filepath, "log.csv");
-
+		public static List<string> outstanding = new List<string>();
+		public static List<string> ignoreList = new List<string>();
 		private static async Task Main()
 		{
 			Console.ForegroundColor = ConsoleColor.White;
@@ -26,8 +27,10 @@ namespace NetScraper
 			Console.WriteLine("Reading Settings from {0}", fileSettings);
 			var oldsettings = await LogWriter.LoadJsonAsync();
 			PostgreSQL.cs = oldsettings.ConnectionString;
+			Console.WriteLine(PostgreSQL.cs);
 			//! This sets the webclient timeout for scraping
 			Scraper.webclient.Timeout = TimeSpan.FromSeconds(1);
+			ServicePointManager.DefaultConnectionLimit = int.MaxValue;
 			Console.WriteLine("https://github.com/Jona4Play/NetScraper");
 			Console.WriteLine("=========================================");
 			Console.WriteLine("Type 'help' to get the list of commands");
@@ -170,6 +173,25 @@ namespace NetScraper
 						//var expstate = await RunScraperAlternativeScheduler(startlinks);
 						break;
 
+					case "ws":
+						SettingObject setting = new();
+						setting.ShouldRun = true;
+						setting.BatchesCompleted = 0;
+						setting.ConnectionString = ConnectionString;
+						setting.ScrapesCompleted = 0;
+						setting.SimultaneousPool = SimultaneousPool;
+						var setstate = await LogWriter.WriteSettingsJsonAsync(setting);
+
+						if (setstate)
+						{
+							WriteSuccessMessage("Writing settings was successful");
+						}
+						else
+						{
+							WriteErrorMessage("Writing settings failed");
+						}
+						break;
+
 					case "info":
 						var s = await PostgreSQL.GetScrapingCount();
 						Console.WriteLine("=========================================");
@@ -194,10 +216,9 @@ namespace NetScraper
 				}
 			}
 		}
-
+		
 		private static async Task<int> RunScraper(List<string> startlinks)
 		{
-			List<string> outstanding = new List<string>();
 			ConcurrentBag<string> clinks = new ConcurrentBag<string>();
 			if (outstanding.Count is 0 && startlinks.Count is 0)
 			{
@@ -225,6 +246,8 @@ namespace NetScraper
 				}
 				else
 				{
+					
+
 					Console.WriteLine("Outstanding isn't null");
 					foreach (var item in outstanding)
 					{
@@ -244,7 +267,7 @@ namespace NetScraper
 				{
 					documents.Add(await Scraper.ScrapFromLinkAsync(item));
 				});
-
+				
 				//! Push Results to DB
 				var state = PostgreSQL.PushDocumentListAsync(documents);
 				var write = LogWriter.WriteLinkBuffer(outstanding);
@@ -288,6 +311,7 @@ namespace NetScraper
 				oldsettings.BatchesCompleted = Batch;
 				oldsettings.ScrapesCompleted = x;
 				var settingstate = await LogWriter.WriteSettingsJsonAsync(oldsettings);
+				ignoreList.Clear();
 				if (settingstate)
 				{
 					WriteSuccessMessage("Wrote settings", true);

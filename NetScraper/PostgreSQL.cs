@@ -21,14 +21,14 @@ namespace NetScraper
 		{
 			using (var con = EstablishDBConnection())
 			{
-				await con.OpenAsync();
+				
 				using var cmd = new NpgsqlCommand();
 				cmd.Connection = con;
 
 				cmd.CommandText = "DROP TABLE IF EXISTS maindata cascade";
 				var x = await cmd.ExecuteNonQueryAsync();
 
-				cmd.CommandText = @"CREATE TABLE maindata(id SERIAL PRIMARY KEY, status BOOLEAN, url TEXT, datetime TEXT, emails TEXT[], csscount INTEGER, jscount INTEGER, approximatesize INTEGER, links TEXT[], contentstring TEXT, imagedescriptions TEXT[], imagelinks TEXT[])";
+				cmd.CommandText = @"CREATE TABLE maindata(id SERIAL PRIMARY KEY, status BOOLEAN, url TEXT, datetime TIMESTAMP, csslinks TEXT[], jslinks TEXT[], csscount INTEGER, jscount INTEGER, approximatesize INTEGER, links TEXT[], contentstring TEXT, imagedescriptions TEXT[], imagelinks TEXT[])";
 				Console.WriteLine("Resetted maindata");
 				await cmd.ExecuteNonQueryAsync();
 				con.Close();
@@ -49,8 +49,7 @@ namespace NetScraper
 			var counter = 0;
 			using (var con = EstablishDBConnection())
 			{
-				con.Open();
-				var sql = @"INSERT INTO maindata(status, url, datetime, emails, csscount, jscount, approximatesize, links, contentstring, imagedescriptions, imagelinks) VALUES(@status, @url, @datetime, @emails, @csscount, @jscount, @approximatesize, @links, @contentstring, @imagedescriptions ,@imagelinks)";
+				var sql = @"INSERT INTO maindata(status, url, datetime, csslinks, jslinks, csscount, jscount, approximatesize, links, contentstring, imagedescriptions, imagelinks) VALUES(@status,@url,@datetime,@csslinks, @jslinks,@csscount, @jscount, @approximatesize, @links, @contentstring, @imagedescriptions ,@imagelinks)";
 
 
 				Console.WriteLine("Documents Count: " + documents.Count());
@@ -62,6 +61,23 @@ namespace NetScraper
 					var imagealts = new List<string>();
 					var imagelinks = new List<string>();
 					var imagepositions = new List<string>();
+
+					if(doc.CSSLinks is not null && doc.CSSCount is not 0)
+					{
+						cmd.Parameters.AddWithValue(@"csslinks", doc.CSSCount);
+					}
+					else
+					{
+						cmd.Parameters.AddWithValue(@"csslinks", new List<string>());
+					}
+					if(doc.JSLinks is not null && doc.JSCount is not 0)
+					{
+						cmd.Parameters.AddWithValue(@"jslinks", doc.JSLinks);
+					}
+					else
+					{
+						cmd.Parameters.AddWithValue(@"jslinks", new List<string>());
+					}
 
 					if (doc.HTMLString is null)
 					{
@@ -101,15 +117,8 @@ namespace NetScraper
 						cmd.Parameters.AddWithValue(@"url", "");
 						throw new Exception("Website was added without Value");
 					}
-					cmd.Parameters.AddWithValue(@"datetime", doc.DateTime.ToString());
-					if (doc.Emails is null)
-					{
-						cmd.Parameters.AddWithValue(@"emails", new List<string>());
-					}
-					else
-					{
-						cmd.Parameters.AddWithValue(@"emails", doc.Emails);
-					}
+					cmd.Parameters.AddWithValue(@"datetime", doc.DateTime.ToUniversalTime());
+
 					cmd.Parameters.AddWithValue(@"csscount", doc.CSSCount);
 					cmd.Parameters.AddWithValue(@"jscount", doc.JSCount);
 					cmd.Parameters.AddWithValue(@"approximatesize", doc.ApproxByteSize);
@@ -158,7 +167,7 @@ namespace NetScraper
 		{
 			using (var con = EstablishDBConnection())
 			{
-				await con.OpenAsync();
+				
 				var sql = "SELECT * FROM maindata WHERE ID = (SELECT MAX(id) FROM maindata)";
 				var cmd = new NpgsqlCommand(sql, con);
 				using NpgsqlDataReader rdr = await cmd.ExecuteReaderAsync();
@@ -181,7 +190,9 @@ namespace NetScraper
 		{
 			try
 			{
+				
 				var con = new NpgsqlConnection(cs);
+				con.Open();
 				return con;
 			}
 			catch (Exception)

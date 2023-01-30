@@ -1,1 +1,1 @@
-{"StartedScraping":"2022-12-22T16:50:38.621728+01:00","SimultaneousPool":70,"ShouldRun":true,"ScrapesCompleted":556,"BatchesCompleted":2,"ConnectionString":"Host=192.168.2.220;Username=postgres;Password=1598;Database=Netscraper"}
+{"StartedScraping":"2023-01-30T10:26:15.2204396+01:00","SimultaneousPool":70,"ShouldRun":true,"ScrapesCompleted":501,"BatchesCompleted":2,"ConnectionString":"Host=192.168.2.220;Username=postgres;Password=1598;Database=Netscraper"}

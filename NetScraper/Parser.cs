@@ -14,6 +14,7 @@ namespace NetScraper
 		// Known not to handle HTML comments or CDATA correctly, which we don't use.
 		public static string RemoveInsignificantHtmlWhiteSpace(string html)
 		{
+			html.Replace("\r\n", "").Replace("\n", "").Replace("\r", "");
 			return InsignificantHtmlWhitespace.Replace(html, String.Empty).Trim();
 		}
 
@@ -137,7 +138,7 @@ namespace NetScraper
 		}
 
 		//Get Second Level Domain
-		private static string GetSLD(string? link)
+		public static string GetSLD(string? link)
 		{
 			if (link != null)
 			{
@@ -162,9 +163,16 @@ namespace NetScraper
 				var x = GetSLD(doc.Absoluteurl.ToString());
 				foreach (var link in doc.Links.ToList())
 				{
-					if (GetSLD(link) != x && GetSLD(link) != null)
+					string domain = GetSLD(link);
+					if(domain is not null && domain != x)
 					{
-						prioritisedlinks.Add(link);
+						foreach (var ignore in CoreHandler.ignoreList)
+						{
+							if (domain != ignore)
+							{
+								prioritisedlinks.Add(link);
+							}
+						}
 					}
 				}
 
