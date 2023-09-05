@@ -19,7 +19,7 @@ namespace NetScraper
 
 		public static async Task<bool> ResetMainDataAsync()
 		{
-			using (var con = EstablishDBConnection())
+			using (var con = EstablishDBConnection()!)
 			{
 				
 				using var cmd = new NpgsqlCommand();
@@ -47,7 +47,7 @@ namespace NetScraper
 		{
 			Console.WriteLine("Called PushDocuments");
 			var counter = 0;
-			using (var con = EstablishDBConnection())
+			using (var con = EstablishDBConnection()!)
 			{
 				var sql = @"INSERT INTO maindata(status, url, datetime, csslinks, jslinks, csscount, jscount, approximatesize, links, contentstring, imagedescriptions, imagelinks) VALUES(@status,@url,@datetime,@csslinks, @jslinks,@csscount, @jscount, @approximatesize, @links, @contentstring, @imagedescriptions ,@imagelinks)";
 
@@ -165,7 +165,7 @@ namespace NetScraper
 		}
 		public static async Task<long> GetScrapingCount()
 		{
-			using (var con = EstablishDBConnection())
+			using (var con = EstablishDBConnection()!)
 			{
 				
 				var sql = "SELECT * FROM maindata WHERE ID = (SELECT MAX(id) FROM maindata)";
@@ -186,7 +186,7 @@ namespace NetScraper
 				}
 			}
 		}
-		private static NpgsqlConnection EstablishDBConnection()
+		private static NpgsqlConnection? EstablishDBConnection()
 		{
 			try
 			{
